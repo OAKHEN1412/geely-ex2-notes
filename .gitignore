@@ -1,0 +1,8 @@
+# artifacts / temp
+*.apk
+*.ipa
+*.zip
+__pycache__/
+*.pyc
+work/
+*.keystore
