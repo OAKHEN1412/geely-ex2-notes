@@ -1,0 +1,4 @@
+# override root .gitignore — keep the app binaries in this folder
+!*.apk
+!*.ipa
+!*.png
