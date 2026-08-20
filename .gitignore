@@ -6,3 +6,10 @@ __pycache__/
 *.pyc
 work/
 *.keystore
+
+# local working folders (binaries / keys / เฉพาะรอบ) — ดู _LOCAL-FILES.md
+_artifacts/
+_signed-apk/
+_patches/
+_signing-kit/
+HANDOFF.md
