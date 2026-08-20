@@ -14,6 +14,7 @@
 | 03 | [docs/03-app-features.md](docs/03-app-features.md) | ฟีเจอร์ทั้งสองฝั่งทำอะไรได้บ้าง |
 | 04 | [docs/04-flash-usb-plan.md](docs/04-flash-usb-plan.md) | แผนเตรียม USB flash + ปัญหา read-only USB ที่เจอ |
 | 05 | [docs/05-translation-plan.md](docs/05-translation-plan.md) | แผนแปลแอปเป็นไทย/อังกฤษ + ความเป็นไปได้ |
+| 06 | [docs/06-install-app-system-signed.md](docs/06-install-app-system-signed.md) | **ติดตั้ง Car.apk จริง** — re-sign ด้วย AOSP platform key + ลงเป็น system app |
 | — | [docs/translation-table.md](docs/translation-table.md) | ตารางแปล VN → ไทย → อังกฤษ (ครบทุก UI string) |
 | — | [docs/artifacts.md](docs/artifacts.md) | ลิงก์หน้าเว็บ (artifact) ที่สร้างไว้ |
 
@@ -21,9 +22,15 @@
 
 | ไฟล์ | ใช้ทำอะไร |
 |------|-----------|
-| [tools/prep-usb.ps1](tools/prep-usb.ps1) | เตรียม USB FAT32 + แตกแพตช์ + ตรวจโครงสร้างให้ถูกต้อง |
-| [tools/dex_strings.py](tools/dex_strings.py) | สกัด string table จาก APK (DEX) — ใช้แกะข้อความ/คลาส |
-| [tools/ipa_strings.py](tools/ipa_strings.py) | สกัดข้อความจาก IPA (Mach-O debug dylib) |
+ดูรายละเอียดครบใน [tools/README.md](tools/README.md)
+
+| ไฟล์ | ใช้ทำอะไร |
+|------|-----------|
+| [tools/prep-usb.ps1](tools/prep-usb.ps1) | เตรียม USB FAT32 + แตกแพตช์ + ตรวจโครงสร้าง |
+| [tools/resign_apk.sh](tools/resign_apk.sh) | เซ็น Car.apk ใหม่ด้วย AOSP platform key (docs/06) |
+| [tools/push_signed.sh](tools/push_signed.sh) | push signed APK เป็น system app → reboot (docs/06) |
+| [tools/v2cert.py](tools/v2cert.py) / [fpcheck.py](tools/fpcheck.py) | แกะ/ตรวจ cert จาก APK v2/v3 (ไม่ต้องใช้ Java) |
+| [tools/dex_strings.py](tools/dex_strings.py) / [ipa_strings.py](tools/ipa_strings.py) | สกัดข้อความจาก APK/IPA |
 
 ## สรุปสั้นสำหรับคนรีบ
 
@@ -31,13 +38,17 @@
 - ใช้ได้เฉพาะจอ **IHU629G / EEBADF1 / Flyme Auto E 1.8.0 build 1111 หรือ 1114** — ผิดเวอร์ชันเสี่ยงต้องแฟลชจอใหม่
 - แอปเป็น **คู่ client↔server**: `Geely-Ex2-Car.apk` (รถ, เซิร์ฟเวอร์) + `Geely-Ex2-Phone.apk` / `GeelyEX2.ipa` (มือถือ, รีโมท) คุยกันตรงผ่าน **Wi-Fi TCP 47800** หรือ Bluetooth (Android=SPP, iOS=BLE-UART) — ไม่ผ่านคลาวด์
 - แอปเป็น **ภาษาเวียดนามล้วน** งานชุมชนคนเวียดนามทำ (ติดต่อผ่าน Zalo) — มีเฉพาะ Car.apk ที่สลับอังกฤษได้
-- สถานะงาน: **ยังไม่ได้ลงมือ** — รอ (1) หา USB ที่เขียนได้ (2) เช็กบิลด์ที่จอรถ (3) โหลดแพตช์ให้ตรง
+- **`adb install` ธรรมดาไม่ผ่าน** — Car.apk เป็น `sharedUserId=android.uid.system` ต้อง **re-sign ด้วย platform key** (จอใช้ AOSP test-key สาธารณะ) + ลงเป็น system app (ดู docs/06)
+- สถานะงาน: **✅ ติดตั้งสำเร็จบนจอบิลด์ 1114 (2026-08-20)** — เป็น system app สิทธิ์เต็ม (userId=1000)
 
 ## สถานะ / TODO
 
-- [ ] เช็กบิลด์จอรถ (ตั้งค่ารถ → รถของฉัน) ว่า 1111 หรือ 1114
-- [ ] หา USB ที่ไม่ใช่ตัวติดตั้ง Windows (ตัวเดิม read-only ระดับเฟิร์มแวร์)
-- [ ] โหลดแพตช์จาก Google Drive ให้ตรงบิลด์
-- [ ] รัน `tools/prep-usb.ps1` เตรียม USB
-- [ ] ปลดล็อก + ลง `Geely-Ex2-Car.apk`
-- [ ] (ทางเลือก) แปลแอปเป็นไทย/อังกฤษ — ดู docs/05
+- [x] เช็กบิลด์จอรถ → **1114**
+- [x] หา USB ที่เขียนได้ (ตัว Kingston Windows เดิม read-only เฟิร์มแวร์ → ใช้ตัวอื่น)
+- [x] โหลดแพตช์ 1114 + รัน `tools/prep-usb.ps1` เตรียม USB
+- [x] ปลดล็อก ADB สำเร็จ
+- [x] **ลง `Geely-Ex2-Car.apk` สำเร็จ** (re-sign + system app — ดู docs/06)
+- [ ] ทดสอบแอปบนจอ (คุมแอร์/ไฟ ambient/กระจก จริง)
+- [ ] (ทางเลือก) ลงแอปมือถือรีโมท — `Geely-Ex2-Phone.apk` / `GeelyEX2.ipa`
+- [ ] (ทางเลือก) แปลแอปเป็นไทย/อังกฤษ — ดู docs/05 + `docs/translation-table.md`
+- [ ] ปิด adb-over-wifi เมื่อไม่ใช้ (ความปลอดภัย)
