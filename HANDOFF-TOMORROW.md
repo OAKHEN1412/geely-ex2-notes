@@ -5,6 +5,16 @@ _เขียน 2026-08-21 ปลายเซสชัน · ผู้ใช้
 ## สถานะรวม
 วันนี้สร้าง/แก้เสร็จ **โค้ด+APK พร้อมลงหมด** แต่ **ยังไม่ได้เทสต์บนจอจริง** (adb offline ทั้งวันช่วงหลัง) — พรุ่งนี้ = ต่อ adb → build/install/recon/test
 
+### อัปเดต 2026-08-21 (รอบ 3 ต่อ) — ✅ claude.ai ใช้ได้แล้ว (ผ่าน Cromite)
+- **WebView provider swap บน Android 9 = ทำไม่ได้จริง**: WebView v83 เก่าเกิน claude.ai ไม่ขึ้น · ตัวแทนที่ใหม่พอ:
+  - Cromite SystemWebView (package `com.android.webview` เป๊ะ! Chromium 148) แต่ **minSdk=29 (Android 10)** ลงไม่ได้
+  - Cromite เก่า (v115-122, minSdk ต่ำ) มี**แต่ browser** ไม่มี SystemWebView
+  - → ไม่มี SystemWebView modern ที่ Android 9 (API28) ลงได้ → provider swap ตกไป
+- **✅ ทางออก: Cromite browser (Chromium 120, engine ตัวเอง)** — `org.cromite.cromite` เปิด **claude.ai เรนเดอร์เต็มสมบูรณ์** + grant ไมค์แล้ว (voice ใช้ได้)
+  - APK: `_apps/Cromite_120.apk` (gitignored) · โหลดจาก github uazo/cromite tag v120.0.6099.216 `arm64_ChromePublic.apk`
+  - เปิด: `am start -a android.intent.action.VIEW -d https://claude.ai org.cromite.cromite`
+- **ClaudeWeb (WebView wrapper ของเรา) ยังขาว** — แก้ engine ไม่ได้ (WebView system เก่า) → ใช้ Cromite แทนสำหรับ claude.ai · (option: ทำ shortcut/PWA ใน Cromite ให้เหมือนแอพ)
+
 ### อัปเดต 2026-08-21 (รอบ 3 ที่รถ) — ✅ ปิดจอดับสนิทถาวร สำเร็จ!
 **backlight true-off แก้จบแล้ว** (เทสผ่านหลังรีบูตครบวงจร):
 - สถาปัตยกรรมสุดท้าย (ไม่มี daemon/sh/su): **แอพ set `sys.ex2bl` (system_prop) → init `write` เขียน node**
