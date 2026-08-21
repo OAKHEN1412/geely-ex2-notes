@@ -241,12 +241,9 @@ public class FloatingBox {
         final String node = detectBL();
         if (node == null) { screenDim(ctx, wm); return; }   // ไม่มี node -> หรี่จอแทน
         sBlSaved = readBL(node); if (sBlSaved <= 0) sBlSaved = 120;
-        // เซฟ+ตั้ง brightness mode = manual (กัน controller สู้) — จะคืนตอนปลุก
-        try {
-            android.content.ContentResolver cr = ctx.getContentResolver();
-            sBlPrevMode = android.provider.Settings.System.getInt(cr, "screen_brightness_mode", 1);
-            android.provider.Settings.System.putInt(cr, "screen_brightness_mode", 0);
-        } catch (Throwable ignored) {}
+        // ⚠️ ห้ามแตะ Settings.System ในเส้นทางนี้เด็ดขาด — พิสูจน์บนจอแล้วว่า การเขียน screen_brightness/mode
+        // ทริกให้ DisplayPowerController re-apply แล้ว "ไล่ backlight ไป floor 10" สู้กับการเขียน 0 ของเรา
+        // (= จอดับไม่สนิท). เขียน node 0 ตรง ๆ อย่างเดียว node จะคง 0 เอง (จอดับสนิทจริง) + guard คอยย้ำ
 
         final View black = new View(ctx);
         black.setBackgroundColor(Color.BLACK);
@@ -280,11 +277,7 @@ public class FloatingBox {
         // คืนไฟ "คำสั่งสุดท้ายเสมอ" บน bl thread เดียวกัน => รันหลัง 0-write ที่ค้างคิว
         final String node = sBlNode; final int val = sBlSaved > 0 ? sBlSaved : 120;
         if (node != null) bl().execute(new Runnable() { public void run() { writeBL(node, val); } });
-        // คืน brightness mode
-        try {
-            if (sApp != null && sBlPrevMode >= 0)
-                android.provider.Settings.System.putInt(sApp.getContentResolver(), "screen_brightness_mode", sBlPrevMode);
-        } catch (Throwable ignored) {}
+        // ไม่ต้องคืน brightness mode — เพราะไม่ได้แตะ Settings.System ตอนปิด (คืนแค่ node)
         sBlPrevMode = -1;
         if (sWatchdog != null) mainH().removeCallbacks(sWatchdog);
         // ลบ overlay ดำตัวปัจจุบัน (ไม่ใช่ตัวที่ capture)

@@ -5,6 +5,21 @@ _เขียน 2026-08-21 ปลายเซสชัน · ผู้ใช้
 ## สถานะรวม
 วันนี้สร้าง/แก้เสร็จ **โค้ด+APK พร้อมลงหมด** แต่ **ยังไม่ได้เทสต์บนจอจริง** (adb offline ทั้งวันช่วงหลัง) — พรุ่งนี้ = ต่อ adb → build/install/recon/test
 
+### อัปเดต 2026-08-21 (รอบ 2 ที่รถ) — media ครบ, hub ใช้ได้, backlight ติด SELinux
+- ✅ **ลง media/เกมครบ 8 แอพ**: ClaudeWeb, Jellyfin, Moonlight(com.limelight), NewPipe, RetroArch(com.retroarch.aarch64), SimpleAppLauncher(com.simplemobiletools.applauncher), SmartTube(org.smarttube.stable), VLC(org.videolan.vlc)
+- ✅ **EX2 hub ใช้งานได้**: Section A สวิตช์เรา + Section B การ์ดเปิดหน้าเดิม → เปิด `MainActivity` เห็น FlymeVerticalNav ครบทุกแท็บ **เป็นภาษาไทย** (แปลติด) · ⚠️ deep-link เข้าตรงแท็บไม่ติด (route extra ไม่ตรง contract → เปิด EmptyStartScreen, แท็บบาร์อยู่ครบให้แตะเอง) — ถ้าจะให้เข้าตรงแท็บต้อง baksmali MainActivity หา key จริง
+- 🔴 **backlight true-off = ติด SELinux (ต้นตอสุดท้าย)**:
+  ```
+  avc: denied { search } comm="geely.ex2.tools" tcontext=u:object_r:sysfs_leds:s0 tclass=dir
+      scontext=u:r:system_app:s0  permissive=0
+  ```
+  แอพ `system_app` **search /sys/class/leds ไม่ได้** → `File.exists()`=false → `detectBL()`=null → fallback ไป dim (brightness=0 → floor 10 = ดับไม่สนิท) · แอพ exec sh/su ไม่ได้ด้วย (entrypoint denied shell_exec/su_exec) → shell out ไม่ได้
+  - จอ: `ro.secure=0`, `/system/xbin/su` (AOSP toybox `su <uid> <cmd>` ไม่ใช่ `su -c`), ไม่มี Magisk, sepolicy=/vendor/etc/selinux/precompiled_sepolicy
+  - **พิสูจน์แล้วว่า node ถูกตัว**: `echo 0 > /sys/class/leds/lcd-backlight/brightness` (as root) → **จอดับสนิทจริง** (user ยืนยัน) · แต่ **ห้ามแตะ Settings.System** (ตั้ง screen_brightness → DisplayPowerController ไล่ node ไป floor 10)
+  - แก้แล้วในโค้ด: backlight path เลิกแตะ Settings.System (commit) — แต่ยังไม่พอเพราะ SELinux block detectBL
+  - **ทางแก้ (รอ user เลือก, ต้องรีบูต)**: (A) init.rc ใน /system เขียน node ตาม property + แอพสั่งผ่าน property · (B) magiskpolicy inject `allow system_app sysfs_leds` + re-inject ตอนบูต · **user เลือก "พักไว้ก่อน"**
+- 🐛 backlight code fix: `FloatingBox.screenOffBacklight/screenOnBacklight` ถอด `Settings.System.screen_brightness_mode` ออก (มันทริก controller ไล่ floor)
+
 ### อัปเดต 2026-08-21 (รอบเทสจริงบนจอ) — ต่อ adb ลง+เทสแล้ว
 สถานะ: จอ 172.20.10.3 (IP เปลี่ยนได้ · ARP mac e8-8f-c4-08-dd-72) · **build+ลงทั้ง 2 แอปสำเร็จ, fp ตรงจอ**
 - ✅ **EX2 harness ทำงาน**: DevService foreground รัน, กล่องลอย ☰ เด้งบนจอ, ศูนย์ตั้งค่า 4 สวิตช์เรนเดอร์สวยครบ
