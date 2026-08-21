@@ -13,3 +13,9 @@ _signed-apk/
 _patches/
 _signing-kit/
 HANDOFF.md
+_build/
+devkit/prebuilt/*.jar
+devkit/prebuilt/*.dex
+devkit/plugins/out/
+devkit/plugins/build/
+_apps/

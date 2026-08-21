@@ -102,8 +102,9 @@ adb shell dumpsys package com.geely.ex2.tools | grep -E 'userId|codePath|flags'
 
 ## 7. ภาษา/แปล
 
-แอปมือถือ **เวียดนามล้วน** hardcode (ไม่มีไฟล์ภาษาแยก สลับไม่ได้), Car.apk มี VI/EN toggle, ไม่มีไทย/จีน
-แปลได้แต่ยาก (ต้อง re-sign หลัง patch string) — ตารางแปล VN→ไทย→อังกฤษ 125 รายการ: [`docs/translation-table.md`](docs/translation-table.md), แผน: [docs/05](docs/05-translation-plan.md)
+**แก้ไข 2026-08-20:** **Car.apk แปลผ่าน string resource เต็มรูปแบบ** (`values/`=VN, **`values-en/`=EN ครบแล้ว**, `values-vi/`=VN) → ทำไทยง่าย **แก้ resource ล้วน ไม่ต้องแตะ smali**: เติม `values-th/strings.xml` + เพิ่ม `th` ใน locales_config แล้ว build (`tools/build_mod.sh`) → เซ็น platform key → push. ✅ พิสูจน์ลูปแล้ว
+แอป**มือถือ** (`Geely-Ex2-Phone.apk`/`.ipa`) ต่างหากที่ **เวียดนามล้วน hardcode ในโค้ด** สลับ/แปลยาก
+ตารางแปล VN→ไทย→อังกฤษ 125 รายการ: [`docs/translation-table.md`](docs/translation-table.md), แผน+วิธี: [docs/05](docs/05-translation-plan.md)
 
 ---
 

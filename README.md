@@ -45,7 +45,7 @@
 - แอปเป็น **คู่ client↔server**: `Geely-Ex2-Car.apk` (รถ, เซิร์ฟเวอร์) + `Geely-Ex2-Phone.apk` / `GeelyEX2.ipa` (มือถือ, รีโมท) คุยกันตรงผ่าน **Wi-Fi TCP 47800** หรือ Bluetooth (Android=SPP, iOS=BLE-UART) — ไม่ผ่านคลาวด์
 - แอปเป็น **ภาษาเวียดนามล้วน** งานชุมชนคนเวียดนามทำ (ติดต่อผ่าน Zalo) — มีเฉพาะ Car.apk ที่สลับอังกฤษได้
 - **`adb install` ธรรมดาไม่ผ่าน** — Car.apk เป็น `sharedUserId=android.uid.system` ต้อง **re-sign ด้วย platform key** (จอใช้ AOSP test-key สาธารณะ) + ลงเป็น system app (ดู docs/06)
-- สถานะงาน: **✅ ติดตั้งสำเร็จบนจอบิลด์ 1114 (2026-08-20)** — เป็น system app สิทธิ์เต็ม (userId=1000)
+- สถานะงาน: **✅ ติดตั้ง + ทดสอบผ่านบนจอบิลด์ 1114 (2026-08-20)** — เป็น system app สิทธิ์เต็ม (userId=1000) ใช้งานได้จริง · ปิด adb-over-wifi แล้ว
 
 ## สถานะ / TODO
 
@@ -54,7 +54,7 @@
 - [x] โหลดแพตช์ 1114 + รัน `tools/prep-usb.ps1` เตรียม USB
 - [x] ปลดล็อก ADB สำเร็จ
 - [x] **ลง `Geely-Ex2-Car.apk` สำเร็จ** (re-sign + system app — ดู docs/06)
-- [ ] ทดสอบแอปบนจอ (คุมแอร์/ไฟ ambient/กระจก จริง)
-- [ ] (ทางเลือก) ลงแอปมือถือรีโมท — `Geely-Ex2-Phone.apk` / `GeelyEX2.ipa`
-- [ ] (ทางเลือก) แปลแอปเป็นไทย/อังกฤษ — ดู docs/05 + `docs/translation-table.md`
-- [ ] ปิด adb-over-wifi เมื่อไม่ใช้ (ความปลอดภัย)
+- [x] **ทดสอบแอปบนจอ — ใช้งานได้จริง** (2026-08-20)
+- [ ] (ทางเลือก · ยังไม่จำเป็น) ลงแอปมือถือรีโมท — `Geely-Ex2-Phone.apk` / `GeelyEX2.ipa`
+- [ ] (ทางเลือก · ไว้ทำภายหลัง) แปลแอปเป็นไทย/อังกฤษ — ดู docs/05 + `docs/translation-table.md`
+- [x] **ปิด adb-over-wifi แล้ว** (ความปลอดภัย)
