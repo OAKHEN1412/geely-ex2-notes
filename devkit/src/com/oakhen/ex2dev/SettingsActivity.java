@@ -2,6 +2,7 @@ package com.oakhen.ex2dev;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -15,15 +16,15 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 
 /**
- * ศูนย์ควบคุม EX2 BY OAKHEN — สวิตช์เปิด/ปิด "แต่ละฟีเจอร์" (จำค่าใน SharedPreferences)
- *   • กล่องลอย (master)           -> โชว์/ซ่อนกล่องทันที + gate ฟีเจอร์ลูก
- *   • เริ่มอัตโนมัติหลังบูต        -> DevService เช็คตอนบูตก่อนโผล่กล่อง
- *   • ปุ่ม 🌚 ปิดจอ / 🌙 หรี่จอ    -> FloatingBox เช็คตอนกางเมนูว่าจะโชว์ปุ่มไหน
- *   • กระจกไว 300ms               -> ฝังในแอป (แถวข้อมูล ไม่ใช่สวิตช์ — ไม่ทำสวิตช์หลอก)
+ * ศูนย์ควบคุม EX2 BY OAKHEN — hub เดียวรวม 2 ส่วน:
+ *   A) ฟีเจอร์ EX2 (เพิ่มโดยเรา)  — สวิตช์เปิด/ปิดต่อฟีเจอร์ (กล่องลอย/เริ่มอัตโนมัติ/ปุ่มปิดจอ/ปุ่มหรี่จอ) + กระจกไว
+ *   B) ฟีเจอร์รถ (แอพเดิม Geely)  — การ์ดลัดเปิดหน้าฟีเจอร์เดิม (เปิด MainActivity + best-effort deep-link route)
+ * UI เดิม (Compose) ไม่ถูกแตะ — ยังทำงานครบ; hub นี้เป็นประตูเดียวที่รวมทั้งของเราและของเดิม
  */
 public class SettingsActivity extends Activity {
 
@@ -33,6 +34,8 @@ public class SettingsActivity extends Activity {
     private static final int CLAY  = 0xFFD97757;
     private static final int CREAM = 0xFFF2EFE9;
     private static final int MUTED = 0xFF9AA0A6;
+
+    private static final String CAR_MAIN = "com.geely.ex2.tools.MainActivity";
 
     private SharedPreferences sp;
     private final ArrayList<Switch> children = new ArrayList<Switch>(); // สวิตช์ลูก (ปิดตอน master ปิด)
@@ -50,7 +53,7 @@ public class SettingsActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(pad, dp(24), pad, dp(24));
+        root.setPadding(pad, dp(24), pad, dp(28));
         scroll.addView(root);
 
         // ---------- header ----------
@@ -62,12 +65,14 @@ public class SettingsActivity extends Activity {
         root.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("ศูนย์ควบคุมฟีเจอร์");
+        sub.setText("ศูนย์ควบคุม");
         sub.setTextColor(MUTED);
         sub.setTextSize(14);
         root.addView(sub, marginTop(dp(2)));
 
-        // ---------- master: กล่องลอย ----------
+        // ========== A) ฟีเจอร์ EX2 (ของเรา) ==========
+        sectionLabel(root, "ฟีเจอร์ EX2 · เพิ่มโดยเรา");
+
         final Switch master = row(root, "กล่องลอย (Floating Box)",
                 "กล่อง ☰ ลอยบนจอ · แตะเพื่อกางเมนูปิด/หรี่จอ",
                 Prefs.KEY_FLOATING, true, false);
@@ -79,31 +84,130 @@ public class SettingsActivity extends Activity {
             }
         });
 
-        // ---------- ฟีเจอร์ลูก ----------
         Switch autostart = child(root, "เริ่มอัตโนมัติหลังบูต",
-                "โผล่กล่องเองเมื่อสตาร์ทรถ/รีบูตจอ",
-                Prefs.KEY_AUTOSTART, true);
+                "โผล่กล่องเองเมื่อสตาร์ทรถ/รีบูตจอ", Prefs.KEY_AUTOSTART, true);
         autostart.setOnCheckedChangeListener(saver(Prefs.KEY_AUTOSTART));
 
         Switch btnOff = child(root, "ปุ่ม 🌚 ปิดจอ",
-                "ในเมนูกล่อง — ดับ backlight ทั้งจอ แตะปลุก",
-                Prefs.KEY_BTN_OFF, true);
+                "ในเมนูกล่อง — ดับ backlight ทั้งจอ แตะปลุก", Prefs.KEY_BTN_OFF, true);
         btnOff.setOnCheckedChangeListener(saver(Prefs.KEY_BTN_OFF));
 
         Switch btnDim = child(root, "ปุ่ม 🌙 หรี่จอ",
-                "ในเมนูกล่อง — หรี่จอ (สำรอง) แตะปลุก",
-                Prefs.KEY_BTN_DIM, true);
+                "ในเมนูกล่อง — หรี่จอ (สำรอง) แตะปลุก", Prefs.KEY_BTN_DIM, true);
         btnDim.setOnCheckedChangeListener(saver(Prefs.KEY_BTN_DIM));
 
-        // ---------- แถวข้อมูล (ไม่ใช่สวิตช์) ----------
         infoRow(root, "กระจกไว 300ms",
                 "ลดกระจกเร็วขึ้นเมื่อเปิดประตูรถจอด · ทำงานอัตโนมัติ (ฝังในแอป)");
+
+        // ========== B) ฟีเจอร์รถ (แอพเดิม Geely) ==========
+        sectionLabel(root, "ฟีเจอร์รถ · แอพเดิม (Geely)");
+        TextView hint = new TextView(this);
+        hint.setText("แตะเพื่อเปิดหน้าเดิมของแอพ Geely");
+        hint.setTextColor(MUTED); hint.setTextSize(13);
+        root.addView(hint, marginTop(dp(2)));
+
+        // การ์ด 2 คอลัมน์ (emoji + label -> เปิด MainActivity + route)
+        String[][] feats = {
+            {"🏠", "ภาพรวม",            "home"},
+            {"🪟", "ปิดกระจกอัตโนมัติ",   "auto_window"},
+            {"🔊", "เสียง AVAS",         "avas"},
+            {"💡", "ไฟ Ambient",        "ambient_light"},
+            {"🔋", "แบตเตอรี่",          "battery"},
+            {"🚗", "การขับขี่",          "driving"},
+            {"❄️", "ปรับอากาศ",         "hvac"},
+            {"⚙️", "ตั้งค่าเดิม",         "settings"},
+        };
+        LinearLayout rowLay = null;
+        for (int i = 0; i < feats.length; i++) {
+            if (i % 2 == 0) {
+                rowLay = new LinearLayout(this);
+                rowLay.setOrientation(LinearLayout.HORIZONTAL);
+                root.addView(rowLay, marginTop(dp(12)));
+            }
+            rowLay.addView(carCard(feats[i][0], feats[i][1], feats[i][2]),
+                    cellParams(i % 2 == 0));
+        }
+
+        // ปุ่มเปิดแอพเดิมเต็ม (เผื่อ route ไม่ตรง)
+        LinearLayout openAll = new LinearLayout(this);
+        openAll.setBackground(cardBg());
+        openAll.setGravity(Gravity.CENTER);
+        int op = dp(16); openAll.setPadding(op, op, op, op);
+        openAll.setClickable(true);
+        TextView oa = new TextView(this);
+        oa.setText("↗  เปิดแอพเดิมเต็ม (ทุกฟีเจอร์รถ)");
+        oa.setTextColor(CLAY); oa.setTextSize(16);
+        openAll.addView(oa);
+        openAll.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { openCar(null); }
+        });
+        root.addView(openAll, marginTop(dp(12)));
 
         setChildrenEnabled(master.isChecked());
         setContentView(scroll);
     }
 
+    /** เปิด MainActivity ของแอพเดิม + ยิง route extra แบบ best-effort หลาย key (ไม่ตรงก็เปิดหน้าหลัก) */
+    private void openCar(String route) {
+        try {
+            Intent i = new Intent();
+            i.setClassName(getPackageName(), CAR_MAIN);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            if (route != null) {
+                for (String k : new String[]{"route", "screen", "destination",
+                        "start_destination", "nav_route", "tab"}) {
+                    i.putExtra(k, route);
+                }
+            }
+            startActivity(i);
+        } catch (Throwable t) {
+            Toast.makeText(this, "เปิดแอพเดิมไม่ได้", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     // ---------- builders ----------
+
+    private void sectionLabel(LinearLayout parent, String text) {
+        TextView t = new TextView(this);
+        t.setText(text.toUpperCase());
+        t.setTextColor(CLAY);
+        t.setTextSize(12);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setLetterSpacing(0.08f);
+        LinearLayout.LayoutParams lp = marginTop(dp(26));
+        parent.addView(t, lp);
+    }
+
+    /** การ์ดฟีเจอร์รถ (แตะเปิด MainActivity) */
+    private View carCard(String emoji, String label, final String route) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setBackground(cardBg());
+        int p = dp(14); card.setPadding(p, p, p, p);
+        card.setClickable(true);
+
+        TextView ic = new TextView(this);
+        ic.setText(emoji); ic.setTextSize(20);
+        card.addView(ic);
+
+        TextView t = new TextView(this);
+        t.setText("  " + label); t.setTextColor(CREAM); t.setTextSize(15);
+        card.addView(t);
+
+        card.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { openCar(route); }
+        });
+        return card;
+    }
+
+    private LinearLayout.LayoutParams cellParams(boolean first) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        if (!first) lp.leftMargin = dp(12);
+        return lp;
+    }
 
     /** แถวสวิตช์ในการ์ด; child=true จะถูกปิดใช้งานเมื่อ master ปิด */
     private Switch row(LinearLayout parent, String title, String desc, String key, boolean def, boolean child) {

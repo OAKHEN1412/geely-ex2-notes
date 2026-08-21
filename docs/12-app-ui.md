@@ -38,4 +38,10 @@ _2026-08-21 · ครอบคลุมแอปที่ "เขียน sourc
 
 โค้ดที่อ่าน pref จริง: `SettingsActivity` (เขียน), `DevService.onStartCommand` (`floating_enabled && auto_start`), `FloatingBox.togglePanel` (`btn_screenoff`/`btn_dim`)
 
+### Hub รวม (ของเรา + ฟีเจอร์รถเดิม)
+`SettingsActivity` เป็น **ประตูเดียว** 2 ส่วน:
+- **A) ฟีเจอร์ EX2 (ของเรา)** — สวิตช์ 4 ตัว + กระจกไว (ตามตารางบน)
+- **B) ฟีเจอร์รถ (แอพเดิม Geely)** — การ์ดลัด (ภาพรวม/ปิดกระจกอัตโนมัติ/AVAS/Ambient/แบต/ขับขี่/แอร์/ตั้งค่าเดิม) แตะแล้วเปิด `com.geely.ex2.tools.MainActivity` (exported, package เดียวกัน) + ยิง route extra แบบ best-effort หลาย key (`route/screen/destination/start_destination/nav_route/tab`) → ถ้าแอพเดิมอ่าน key ไหนก็เข้าหน้านั้น ไม่ตรงก็เปิดหน้าหลัก (แอพเดิมใช้ `FlymeVerticalNav` โชว์ทุกแท็บอยู่แล้ว) · **ไม่แตะ Compose เดิม — ทำงานครบ**
+- ⚠️ route key/name ยังไม่ยืนยันบนจอ — รอบหน้าเทสว่า deep-link เข้าตรงแท็บได้ไหม (ถ้าไม่ ก็ยังเปิดแอพเดิมเห็นทุกแท็บ)
+
 **Build harness dex** (เมื่อแก้โค้ด harness): `JAVAC=... bash devkit/build_harness.sh` → `devkit/prebuilt/ex2dev-classes17.dex` → แล้วค่อย `! bash tools/build_oakhen.sh`
