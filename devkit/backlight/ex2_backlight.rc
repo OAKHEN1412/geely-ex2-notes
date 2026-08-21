@@ -1,10 +1,8 @@
-# ex2_backlight.rc — init service คุม backlight ให้ EX2 BY OAKHEN (วางที่ /system/etc/init/)
-# รัน daemon เป็น root (su domain = เขียน sysfs_leds ได้) หลังบูตเสร็จ
-service ex2_bl /system/bin/sh /system/etc/ex2_backlight.sh
-    class late_start
-    user root
-    group root system
-    seclabel u:r:su:s0
-
-on property:sys.boot_completed=1
-    start ex2_bl
+# ex2_backlight.rc — init เขียน backlight ตาม property ที่แอพ set (วางที่ /system/etc/init/)
+# แอพ system_app แตะ /sys/class/leds เองไม่ได้ (SELinux) แต่ set system_prop "sys.ex2bl" ได้
+# init (u:r:init:s0) เขียน sysfs_leds ได้ (มี write /sys/class/leds/... ใน rc เดิมของเครื่องอยู่แล้ว)
+#   สั่งดับ: แอพ set sys.ex2bl=0    -> init เขียน node 0 (คงอยู่เอง จอดับสนิท)
+#   ปลุก:   แอพ set sys.ex2bl=<ค่า> -> init เขียน node ค่านั้น
+# sys.* = volatile (รีเซ็ตตอนบูต) จึงไม่ค้างดับข้ามรีบูต
+on property:sys.ex2bl=*
+    write /sys/class/leds/lcd-backlight/brightness ${sys.ex2bl}

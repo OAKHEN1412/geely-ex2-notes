@@ -18,22 +18,22 @@ S 'id' | grep -q 'uid=0' || { echo "!!! จอไม่ root/ไม่ออน�
 echo ">>> [1/5] remount /system rw"
 S 'mount -o rw,remount /system' ; S 'mount -o rw,remount /' 2>/dev/null || true
 
-echo ">>> [2/5] push script + rc เข้า /system"
-"$ADB" -s "$D" push "$REPO_WIN/devkit/backlight/ex2_backlight.sh" /system/etc/ex2_backlight.sh 2>&1 | tail -1
+echo ">>> [2/5] push rc เข้า /system/etc/init + ลบ daemon .sh เก่า (เลิกใช้ — ใช้ init write property แทน)"
 "$ADB" -s "$D" push "$REPO_WIN/devkit/backlight/ex2_backlight.rc" /system/etc/init/ex2_backlight.rc 2>&1 | tail -1
+S 'rm -f /system/etc/ex2_backlight.sh'
 
-echo ">>> [3/5] perms + SELinux label (ให้ตรงกับไฟล์ระบบอื่น)"
-S 'chmod 755 /system/etc/ex2_backlight.sh; chown 0:0 /system/etc/ex2_backlight.sh; chcon u:object_r:system_file:s0 /system/etc/ex2_backlight.sh'
-# .rc ให้ label ตรงกับ .rc อื่นในโฟลเดอร์ (มัก system_file)
+echo ">>> [3/5] perms + SELinux label (ให้ตรงกับ .rc อื่นในโฟลเดอร์)"
 RCLABEL=$(S "ls -Z /system/etc/init/AAutoService.rc 2>/dev/null | awk '{print \$1}'")
 [ -z "$RCLABEL" ] && RCLABEL="u:object_r:system_file:s0"
 S "chmod 644 /system/etc/init/ex2_backlight.rc; chown 0:0 /system/etc/init/ex2_backlight.rc; chcon $RCLABEL /system/etc/init/ex2_backlight.rc"
 echo "    rc label = $RCLABEL"
 
 echo ">>> [4/5] ยืนยันไฟล์"
-S 'ls -lZ /system/etc/ex2_backlight.sh /system/etc/init/ex2_backlight.rc'
+S 'ls -lZ /system/etc/init/ex2_backlight.rc'
 
-echo ">>> [5/5] เสร็จ — ต้อง reboot ให้ init โหลด service"
+echo ">>> [5/5] เสร็จ — ต้อง reboot ให้ init โหลด trigger ใน .rc"
 echo "    รีบูต:  $ADB -s $D reboot"
-echo "    หลังรีบูต: เปิดปุ่ม ADB ที่ Dialer ใหม่ แล้วเช็ก:  adb shell 'ps -A | grep ex2_backlight'  (ต้องเห็น)"
-echo "    ทดสอบ: แตะกล่องลอย -> 🌚 ปิดจอ -> ต้องดับสนิท"
+echo "    หลังรีบูต (เปิดปุ่ม ADB ใหม่) เทส trigger:"
+echo "      adb shell 'setprop sys.ex2bl 0; sleep 1; cat /sys/class/leds/lcd-backlight/brightness'   # ควรได้ 0 (จอดับ)"
+echo "      adb shell 'setprop sys.ex2bl 166'                                                          # คืน"
+echo "    แล้วเทสจริง: แตะกล่องลอย -> 🌚 ปิดจอ -> ต้องดับสนิท"

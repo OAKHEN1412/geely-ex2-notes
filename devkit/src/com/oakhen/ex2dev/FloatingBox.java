@@ -62,23 +62,27 @@ public class FloatingBox {
     public static void show(final Context ctx) { post(ctx, false); }
     public static void hide(final Context ctx) { post(ctx, true); }
 
-    // แอพ system_app เขียน /sys/class/leds ไม่ได้ (SELinux) -> เขียน flag file ให้ root daemon (ex2_backlight.sh) แทน
-    static final String FLAG_NAME = "ex2_bl";
-    static void writeFlag(Context ctx, String val) {
+    // แอพ system_app เขียน /sys/class/leds ไม่ได้ (SELinux) -> set system_prop "sys.ex2bl"
+    // ให้ init (u:r:init:s0 เขียน sysfs_leds ได้) เขียน node ผ่าน trigger ใน ex2_backlight.rc
+    //   on property:sys.ex2bl=*  ->  write /sys/class/leds/lcd-backlight/brightness ${sys.ex2bl}
+    // system_app set system_prop ได้ (allow system_app system_prop set) · sys.* = system_prop (volatile, reset ตอนบูต)
+    static final String PROP = "sys.ex2bl";
+    static void setProp(String key, String val) {
         try {
-            java.io.FileOutputStream os = new java.io.FileOutputStream(new java.io.File(ctx.getFilesDir(), FLAG_NAME));
-            os.write(val.getBytes("US-ASCII")); os.flush(); os.close();
+            Class<?> sp = Class.forName("android.os.SystemProperties");
+            java.lang.reflect.Method m = sp.getMethod("set", String.class, String.class);
+            m.invoke(null, key, val);
         } catch (Throwable ignored) {}
     }
 
-    /** กู้จอถ้า backlight ค้างดับ (process ตายตอนปิดจอ) — เรียกตอน service start/บูต: เขียน flag เป็นค่าปกติ */
+    /** กู้จอถ้า backlight ค้างดับ — เรียกตอน service start (sys.ex2bl เป็น volatile รีเซ็ตตอนบูตอยู่แล้ว แต่กันเหนียว) */
     public static void recoverBacklight(Context ctx) {
         sApp = ctx.getApplicationContext();
         sBlOff = false;
         int b = 120;
         try { b = android.provider.Settings.System.getInt(sApp.getContentResolver(), "screen_brightness", 120); } catch (Throwable ignored) {}
         if (b <= 0) b = 120;
-        writeFlag(sApp, Integer.toString(b));   // ถ้า flag ค้าง "0" daemon จะดับค้าง -> เขียนค่าปกติกลับ
+        setProp(PROP, Integer.toString(b));   // ถ้าค้าง "0" -> คืนค่าปกติ
     }
 
     private static void post(final Context ctx, final boolean hide) {
@@ -233,7 +237,7 @@ public class FloatingBox {
         try { sBlSaved = android.provider.Settings.System.getInt(ctx.getContentResolver(), "screen_brightness", 120); }
         catch (Throwable t) { sBlSaved = 120; }
         if (sBlSaved <= 0) sBlSaved = 120;
-        writeFlag(ctx, "0");   // daemon จะเขียน node=0 ทุก tick (ดับสนิท ชนะ controller)
+        setProp(PROP, "0");   // init เขียน node=0 (คงอยู่เอง ไม่ต้อง re-write ถ้าไม่แตะ Settings)
 
         final View black = new View(ctx);
         black.setBackgroundColor(Color.BLACK);
@@ -263,8 +267,8 @@ public class FloatingBox {
 
     private static void screenOnBacklight() {
         sBlOff = false;
-        // สั่ง daemon คืน backlight = ค่าที่บันทึกไว้ (flag เปลี่ยนจาก "0" -> daemon เขียนครั้งเดียว)
-        if (sApp != null) writeFlag(sApp, Integer.toString(sBlSaved > 0 ? sBlSaved : 120));
+        // สั่ง init คืน backlight = ค่าที่บันทึกไว้ (property เปลี่ยนจาก "0" -> trigger เขียน node)
+        setProp(PROP, Integer.toString(sBlSaved > 0 ? sBlSaved : 120));
         if (sWatchdog != null) mainH().removeCallbacks(sWatchdog);
         // ลบ overlay ดำตัวปัจจุบัน
         View b = sBlack; sBlack = null;
