@@ -62,25 +62,23 @@ public class FloatingBox {
     public static void show(final Context ctx) { post(ctx, false); }
     public static void hide(final Context ctx) { post(ctx, true); }
 
-    /** กู้จอถ้า backlight/brightness ค้างต่ำ (process ตายตอนปิดจอ) — เรียกตอน service start/บูต */
+    // แอพ system_app เขียน /sys/class/leds ไม่ได้ (SELinux) -> เขียน flag file ให้ root daemon (ex2_backlight.sh) แทน
+    static final String FLAG_NAME = "ex2_bl";
+    static void writeFlag(Context ctx, String val) {
+        try {
+            java.io.FileOutputStream os = new java.io.FileOutputStream(new java.io.File(ctx.getFilesDir(), FLAG_NAME));
+            os.write(val.getBytes("US-ASCII")); os.flush(); os.close();
+        } catch (Throwable ignored) {}
+    }
+
+    /** กู้จอถ้า backlight ค้างดับ (process ตายตอนปิดจอ) — เรียกตอน service start/บูต: เขียน flag เป็นค่าปกติ */
     public static void recoverBacklight(Context ctx) {
         sApp = ctx.getApplicationContext();
         sBlOff = false;
-        // ซ่อม Settings.System ถ้าค้างต่ำ (dim path เคย persist 0/manual) ก่อน DisplayPowerController อ่าน
-        try {
-            android.content.ContentResolver cr = sApp.getContentResolver();
-            int b = android.provider.Settings.System.getInt(cr, "screen_brightness", 120);
-            if (b <= 0) {
-                android.provider.Settings.System.putInt(cr, "screen_brightness", 120);
-                android.provider.Settings.System.putInt(cr, "screen_brightness_mode", 1); // auto
-            }
-        } catch (Throwable ignored) {}
-        // ซ่อม sysfs node ถ้าค้าง 0 (บน bl thread กัน su block main)
-        final String node = detectBL();
-        if (node == null) return;
-        bl().execute(new Runnable() {
-            public void run() { if (readBL(node) <= 0) writeBL(node, sBlSaved > 0 ? sBlSaved : 120); }
-        });
+        int b = 120;
+        try { b = android.provider.Settings.System.getInt(sApp.getContentResolver(), "screen_brightness", 120); } catch (Throwable ignored) {}
+        if (b <= 0) b = 120;
+        writeFlag(sApp, Integer.toString(b));   // ถ้า flag ค้าง "0" daemon จะดับค้าง -> เขียนค่าปกติกลับ
     }
 
     private static void post(final Context ctx, final boolean hide) {
@@ -226,24 +224,16 @@ public class FloatingBox {
         return b;
     }
 
-    // ---------- 🌚 ปิดจอ ผ่าน backlight sysfs ----------
-    // guard tick: เขียน 0 ซ้ำทุก 700ms ขณะ sBlOff — รันบน bl executor เดียว (serialize กับ restore)
-    private static final Runnable sGuardTick = new Runnable() {
-        public void run() {
-            if (!sBlOff) return;
-            if (sBlNode != null) writeBL(sBlNode, 0);
-            if (sBlOff) bl().schedule(this, 700, TimeUnit.MILLISECONDS);
-        }
-    };
+    // ---------- 🌚 ปิดจอ ผ่าน flag file -> root daemon (ex2_backlight.sh) เขียน sysfs ----------
+    // แอพ system_app แตะ /sys/class/leds ไม่ได้ (SELinux search denied) จึงสั่งผ่าน flag ให้ daemon แทน
 
     private static void screenOffBacklight(final Context ctx, final WindowManager wm) {
         if (sBlOff) return;
-        final String node = detectBL();
-        if (node == null) { screenDim(ctx, wm); return; }   // ไม่มี node -> หรี่จอแทน
-        sBlSaved = readBL(node); if (sBlSaved <= 0) sBlSaved = 120;
-        // ⚠️ ห้ามแตะ Settings.System ในเส้นทางนี้เด็ดขาด — พิสูจน์บนจอแล้วว่า การเขียน screen_brightness/mode
-        // ทริกให้ DisplayPowerController re-apply แล้ว "ไล่ backlight ไป floor 10" สู้กับการเขียน 0 ของเรา
-        // (= จอดับไม่สนิท). เขียน node 0 ตรง ๆ อย่างเดียว node จะคง 0 เอง (จอดับสนิทจริง) + guard คอยย้ำ
+        // เก็บ brightness ปัจจุบันไว้คืนตอนปลุก แล้วสั่ง daemon ดับ (flag=0)
+        try { sBlSaved = android.provider.Settings.System.getInt(ctx.getContentResolver(), "screen_brightness", 120); }
+        catch (Throwable t) { sBlSaved = 120; }
+        if (sBlSaved <= 0) sBlSaved = 120;
+        writeFlag(ctx, "0");   // daemon จะเขียน node=0 ทุก tick (ดับสนิท ชนะ controller)
 
         final View black = new View(ctx);
         black.setBackgroundColor(Color.BLACK);
@@ -262,7 +252,6 @@ public class FloatingBox {
         sBlack = black;
 
         sBlOff = true;
-        bl().execute(sGuardTick);   // เริ่ม guard (เขียน 0 ซ้ำบน bl thread)
 
         // watchdog เดี่ยว (ไม่ผูก view) — คืนจอเองใน 10 นาทีถ้าไม่ถูกแตะ
         if (sWatchdog == null) sWatchdog = new Runnable() {
@@ -273,14 +262,11 @@ public class FloatingBox {
     }
 
     private static void screenOnBacklight() {
-        sBlOff = false;   // guard จะหยุด (tick ถัดไปเห็น false = ไม่เขียน ไม่ reschedule)
-        // คืนไฟ "คำสั่งสุดท้ายเสมอ" บน bl thread เดียวกัน => รันหลัง 0-write ที่ค้างคิว
-        final String node = sBlNode; final int val = sBlSaved > 0 ? sBlSaved : 120;
-        if (node != null) bl().execute(new Runnable() { public void run() { writeBL(node, val); } });
-        // ไม่ต้องคืน brightness mode — เพราะไม่ได้แตะ Settings.System ตอนปิด (คืนแค่ node)
-        sBlPrevMode = -1;
+        sBlOff = false;
+        // สั่ง daemon คืน backlight = ค่าที่บันทึกไว้ (flag เปลี่ยนจาก "0" -> daemon เขียนครั้งเดียว)
+        if (sApp != null) writeFlag(sApp, Integer.toString(sBlSaved > 0 ? sBlSaved : 120));
         if (sWatchdog != null) mainH().removeCallbacks(sWatchdog);
-        // ลบ overlay ดำตัวปัจจุบัน (ไม่ใช่ตัวที่ capture)
+        // ลบ overlay ดำตัวปัจจุบัน
         View b = sBlack; sBlack = null;
         if (b != null && sApp != null) {
             try { ((WindowManager) sApp.getSystemService(Context.WINDOW_SERVICE)).removeView(b); } catch (Throwable ignored) {}
