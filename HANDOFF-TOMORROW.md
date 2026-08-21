@@ -5,6 +5,17 @@ _เขียน 2026-08-21 ปลายเซสชัน · ผู้ใช้
 ## สถานะรวม
 วันนี้สร้าง/แก้เสร็จ **โค้ด+APK พร้อมลงหมด** แต่ **ยังไม่ได้เทสต์บนจอจริง** (adb offline ทั้งวันช่วงหลัง) — พรุ่งนี้ = ต่อ adb → build/install/recon/test
 
+### อัปเดต 2026-08-21 (รอบ 3 ที่รถ) — ✅ ปิดจอดับสนิทถาวร สำเร็จ!
+**backlight true-off แก้จบแล้ว** (เทสผ่านหลังรีบูตครบวงจร):
+- สถาปัตยกรรมสุดท้าย (ไม่มี daemon/sh/su): **แอพ set `sys.ex2bl` (system_prop) → init `write` เขียน node**
+  - แอพ system_app เขียน /sys/class/leds เองไม่ได้ (SELinux search denied) แต่ **set system_prop ได้** (`allow system_app system_prop set`)
+  - init (u:r:init:s0) **เขียน sysfs_leds ได้** (มี `write /sys/class/leds/vibrator/trigger` ใน rc เดิม = หลักฐานสิทธิ์)
+  - `on property:sys.ex2bl=*  write /sys/class/leds/lcd-backlight/brightness ${sys.ex2bl}`
+  - เขียน 0 ครั้งเดียว **คงอยู่เอง** (ถ้าไม่แตะ Settings.System) ไม่ต้อง re-write loop
+- ไฟล์: `devkit/backlight/ex2_backlight.rc` (init trigger) · `tools/install_backlight_daemon.sh` (ลง /system ผ่าน `!`) · FloatingBox ใช้ `SystemProperties.set` (reflection)
+- **ผลเทสหลังรีบูต**: `setprop sys.ex2bl 0` → node 166→0 คงที่ · แตะ 🌚 ผ่านแอพ → node=0 ดับสนิท · แตะปลุก → node=166 · DevService+กล่องลอยเด้งเองหลังบูต ✅
+- ทางที่ลองแล้วไม่เวิร์ก (บันทึกกันซ้ำ): daemon sh via init service — **init transition→su:s0 ถูก deny**, shell domain เขียน node ไม่ได้, มีแต่ su/init เขียนได้ → เลยใช้ init write ตรง
+
 ### อัปเดต 2026-08-21 (รอบ 2 ที่รถ) — media ครบ, hub ใช้ได้, backlight ติด SELinux
 - ✅ **ลง media/เกมครบ 8 แอพ**: ClaudeWeb, Jellyfin, Moonlight(com.limelight), NewPipe, RetroArch(com.retroarch.aarch64), SimpleAppLauncher(com.simplemobiletools.applauncher), SmartTube(org.smarttube.stable), VLC(org.videolan.vlc)
 - ✅ **EX2 hub ใช้งานได้**: Section A สวิตช์เรา + Section B การ์ดเปิดหน้าเดิม → เปิด `MainActivity` เห็น FlymeVerticalNav ครบทุกแท็บ **เป็นภาษาไทย** (แปลติด) · ⚠️ deep-link เข้าตรงแท็บไม่ติด (route extra ไม่ตรง contract → เปิด EmptyStartScreen, แท็บบาร์อยู่ครบให้แตะเอง) — ถ้าจะให้เข้าตรงแท็บต้อง baksmali MainActivity หา key จริง
