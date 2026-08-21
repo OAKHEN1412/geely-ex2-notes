@@ -133,7 +133,9 @@ public class FloatingBox {
             public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        dx = e.getRawX(); dy = e.getRawY(); sx = lp.x; sy = lp.y; moved = false; return false;
+                        // ต้อง return true เพื่อ "กิน" gesture — ไม่งั้นไม่ได้ ACTION_UP (togglePanel ไม่ทำงาน)
+                        // และทัชจะทะลุไปโดน UI รถข้างหลัง (เคยเปิดกล้อง 360 โดยไม่ตั้งใจ)
+                        dx = e.getRawX(); dy = e.getRawY(); sx = lp.x; sy = lp.y; moved = false; return true;
                     case MotionEvent.ACTION_MOVE:
                         int nx = sx + (int) (e.getRawX() - dx), ny = sy + (int) (e.getRawY() - dy);
                         if (Math.abs(nx - sx) > 8 || Math.abs(ny - sy) > 8) moved = true;

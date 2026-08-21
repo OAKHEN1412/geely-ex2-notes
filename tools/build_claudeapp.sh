@@ -45,7 +45,20 @@ rm -rf classes; mkdir classes
   --output . $(find classes -name '*.class')
 
 echo ">>> [5/6] ยัด classes.dex เข้า base.apk"
-"$JBIN/jar.exe" uf base.apk classes.dex
+# ใช้ python zipfile (JDK บางตัวไม่มี jar.exe) — ใส่/ทับ entry classes.dex
+py -X utf8 - "$W/base.apk" "$W/classes.dex" <<'PY'
+import sys, zipfile, shutil, os
+apk, dex = sys.argv[1], sys.argv[2]
+tmp = apk + ".tmp"
+with zipfile.ZipFile(apk, 'r') as zin, zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zout:
+    for it in zin.infolist():
+        if it.filename == 'classes.dex':
+            continue
+        zout.writestr(it, zin.read(it.filename))
+    zout.write(dex, 'classes.dex')
+shutil.move(tmp, apk)
+print("    classes.dex ยัดเข้า base.apk แล้ว")
+PY
 
 echo ">>> [6/6] เซ็น (platform key) + verify"
 rm -rf signed; mkdir signed

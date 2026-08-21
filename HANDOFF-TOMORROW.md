@@ -5,6 +5,17 @@ _เขียน 2026-08-21 ปลายเซสชัน · ผู้ใช้
 ## สถานะรวม
 วันนี้สร้าง/แก้เสร็จ **โค้ด+APK พร้อมลงหมด** แต่ **ยังไม่ได้เทสต์บนจอจริง** (adb offline ทั้งวันช่วงหลัง) — พรุ่งนี้ = ต่อ adb → build/install/recon/test
 
+### อัปเดต 2026-08-21 (รอบเทสจริงบนจอ) — ต่อ adb ลง+เทสแล้ว
+สถานะ: จอ 172.20.10.3 (IP เปลี่ยนได้ · ARP mac e8-8f-c4-08-dd-72) · **build+ลงทั้ง 2 แอปสำเร็จ, fp ตรงจอ**
+- ✅ **EX2 harness ทำงาน**: DevService foreground รัน, กล่องลอย ☰ เด้งบนจอ, ศูนย์ตั้งค่า 4 สวิตช์เรนเดอร์สวยครบ
+- 🐛 **แก้บั๊กจริง**: `FloatingBox.onTouch` ACTION_DOWN เดิม `return false` → แตะกล่องทะลุไปโดน UI รถ (เปิด 360) + ไม่ได้ ACTION_UP → togglePanel ไม่ทำงาน · แก้เป็น `return true` → **เมนู 🌚/🌙/▽ เปิดได้แล้ว** (rebuild dex + install ยืนยันผ่าน)
+- ⚠️ **ClaudeWeb: claude.ai เรนเดอร์ไม่ขึ้น (จอขาว)** — WebView = `com.android.webview 83.0.4103.120` (Chrome 83 ปี 2020 เก่าเกิน) DOM มี `#root` แต่สูง 0px = SPA บูตไม่ขึ้น · **แผน: re-sign WebView ใหม่ด้วย platform key → install -r → ตั้ง provider** (ยังไม่ทำ, user เลือกเทส EX2 ก่อน)
+- 🔴 **ปิดจอ (backlight) ยังดับไม่สนิท** — แอพ (uid=1000 system ไม่ใช่ root) เขียน `/sys/class/leds/.../brightness` ไม่ผ่าน (perm/SELinux) → เหลือแค่ black overlay ฝั่งแอพ, panel ยังติด
+  - **ต้อง recon**: `bash tools/recon_backlight.sh <IP>` (หา node จริง + เขียน 0 as root ดับไหม + DAC perm + SELinux avc)
+  - **แผนแก้**: ถ้า root เขียน 0 แล้วดับจริง → ทำ **init.rc hook ใน /system: chmod 0666 + chcon node ตอนบูต** ให้แอพ(group system)เขียนได้ถาวร → guard-tick 700ms เดิมจะเอาชนะ controller ได้
+- build fix: `build_claudeapp.sh` ยัด classes.dex ด้วย python zipfile (JDK ในเครื่องไม่มี jar.exe) · toolchain รอดใน scratchpad `432971d6/.../devkit` (jdk+android28.jar+r8.jar) + `_build/toolchain/`
+- recon โบนัส: **กล้อง 360°/AVM ทำงาน** (กล้องหน้า+bird's-eye) · launcher = Flyme Auto (CarPlay/Android Auto/แอปแนะนำ)
+
 ### อัปเดต 2026-08-21 (รอบบ่าย) — จัดชื่อ/ไอคอน/UI ของแอปที่สร้างเอง ✅ (verify compile ผ่านแล้ว)
 - **ClaudeWeb**: ได้ **ชื่อ "Claude" + ไอคอนแบรนด์ (adaptive clay+sunburst ครบทุก density)** + splash + loading overlay + หน้า offline+ปุ่มลองใหม่ · เพิ่ม `claudeapp/res/` (สร้างไอคอนซ้ำ: `py tools/gen_claude_icon.py`) · `build_claudeapp.sh` เพิ่ม pipeline resource (aapt2 compile/link+R.java) แล้ว
 - **EX2 BY OAKHEN**: `SettingsActivity` เป็น **ศูนย์ควบคุม สวิตช์เปิด/ปิดต่อฟีเจอร์** (กล่องลอย/เริ่มอัตโนมัติ/ปุ่มปิดจอ/ปุ่มหรี่จอ) เดินสายให้ `DevService`+`FloatingBox` อ่าน pref จริง (`Prefs.java`) · รายละเอียด `docs/12-app-ui.md`
