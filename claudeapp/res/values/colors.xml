@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- พาเลตต์แบรนด์ Claude -->
+    <color name="claude_bg">#FF1F1E1C</color>     <!-- พื้นเข้มอมอุ่น (splash/แอป) -->
+    <color name="claude_clay">#FFD97757</color>   <!-- สีดินเผา (accent/โลโก้) -->
+    <color name="claude_cream">#FFFAF9F5</color>  <!-- ครีม (ตัวอักษรหลัก) -->
+    <color name="claude_muted">#FF8A8781</color>  <!-- เทาอมอุ่น (ตัวอักษรรอง) -->
+</resources>

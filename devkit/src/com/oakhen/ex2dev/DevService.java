@@ -29,7 +29,8 @@ public class DevService extends Service {
             final android.content.Context app = getApplicationContext();
             // กู้ backlight เผื่อค้างดำจากรอบก่อน (process ตายตอนปิดจอ)
             try { FloatingBox.recoverBacklight(app); } catch (Throwable ignored) {}
-            if (getSharedPreferences("ex2dev", MODE_PRIVATE).getBoolean("floating_enabled", true)) {
+            // โผล่กล่องตอนบูตเฉพาะเมื่อ เปิดกล่องลอย + เปิด "เริ่มอัตโนมัติหลังบูต" (สวิตช์แยกในหน้าตั้งค่า)
+            if (Prefs.get(app, Prefs.KEY_FLOATING, true) && Prefs.get(app, Prefs.KEY_AUTOSTART, true)) {
                 new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
                     public void run() { try { FloatingBox.show(app); } catch (Throwable ignored) {} }
                 }, 4000);

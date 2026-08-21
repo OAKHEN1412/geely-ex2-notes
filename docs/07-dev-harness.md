@@ -60,7 +60,10 @@ plugin implement `com.oakhen.ex2dev.Plugin` → `String run(Context ctx, String 
 |------|--------|
 | `devkit/src/com/oakhen/ex2dev/*.java` | ซอร์ส harness (Plugin/DevService/DevStartReceiver) |
 | `devkit/prebuilt/ex2dev-classes17.dex` | harness ที่คอมไพล์แล้ว (ฉีดเข้า APK) |
+| `devkit/build_harness.sh` | **คอมไพล์ ex2dev/*.java → ex2dev-classes17.dex** (รันเมื่อแก้โค้ด harness ก่อน build_oakhen) |
 | `tools/build_oakhen.sh` | ประกอบ EX2 BY OAKHEN ครบ (รันผ่าน `!`) |
+| `com/oakhen/ex2dev/SettingsActivity.java` | ศูนย์ตั้งค่า — สวิตช์เปิด/ปิดต่อฟีเจอร์ (ดู `docs/12`) |
+| `com/oakhen/ex2dev/Prefs.java` | คีย์ SharedPreferences กลาง (Settings/DevService/FloatingBox ใช้ร่วม) |
 | `tools/push_plugin.py` | client push plugin ผ่าน WiFi |
 | `devkit/build_plugin.sh` | คอมไพล์ plugin → dex |
 | `devkit/plugins/src/.../HelloPlugin.java` | ตัวอย่าง plugin |

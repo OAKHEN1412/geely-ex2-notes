@@ -5,6 +5,12 @@ _เขียน 2026-08-21 ปลายเซสชัน · ผู้ใช้
 ## สถานะรวม
 วันนี้สร้าง/แก้เสร็จ **โค้ด+APK พร้อมลงหมด** แต่ **ยังไม่ได้เทสต์บนจอจริง** (adb offline ทั้งวันช่วงหลัง) — พรุ่งนี้ = ต่อ adb → build/install/recon/test
 
+### อัปเดต 2026-08-21 (รอบบ่าย) — จัดชื่อ/ไอคอน/UI ของแอปที่สร้างเอง ✅ (verify compile ผ่านแล้ว)
+- **ClaudeWeb**: ได้ **ชื่อ "Claude" + ไอคอนแบรนด์ (adaptive clay+sunburst ครบทุก density)** + splash + loading overlay + หน้า offline+ปุ่มลองใหม่ · เพิ่ม `claudeapp/res/` (สร้างไอคอนซ้ำ: `py tools/gen_claude_icon.py`) · `build_claudeapp.sh` เพิ่ม pipeline resource (aapt2 compile/link+R.java) แล้ว
+- **EX2 BY OAKHEN**: `SettingsActivity` เป็น **ศูนย์ควบคุม สวิตช์เปิด/ปิดต่อฟีเจอร์** (กล่องลอย/เริ่มอัตโนมัติ/ปุ่มปิดจอ/ปุ่มหรี่จอ) เดินสายให้ `DevService`+`FloatingBox` อ่าน pref จริง (`Prefs.java`) · รายละเอียด `docs/12-app-ui.md`
+- **prebuilt `ex2dev-classes17.dex` rebuild แล้ว** (18.5KB→23KB รวม toggle) ด้วยสคริปต์ใหม่ `devkit/build_harness.sh` · **verify แล้วว่า javac+d8 ผ่านทั้ง 2 แอป** (โหลด android28.jar/r8.jar ไว้ใน `_build/toolchain/`)
+- ยังเหลือ: **ลงจอจริง + เทสต์ UI** (ยังไม่ได้ install — adb offline)
+
 ---
 
 ## ⚠️ 0. สิ่งแรกที่ต้องทำพรุ่งนี้: กู้ toolchain (สำคัญสุด)

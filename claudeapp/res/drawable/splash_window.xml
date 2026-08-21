@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- พื้นหลังหน้าต่างตอน cold start: พื้นเข้ม + โลโก้ Claude กลางจอ -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/claude_bg"/>
+    <item
+        android:drawable="@drawable/ic_logo"
+        android:width="140dp"
+        android:height="140dp"
+        android:gravity="center"/>
+</layer-list>

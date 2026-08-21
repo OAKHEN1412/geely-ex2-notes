@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ธีมหลัก: เต็มจอ ไม่มี action bar พื้นเข้มแบรนด์ Claude -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/claude_bg</item>
+        <item name="android:statusBarColor">@color/claude_bg</item>
+        <item name="android:navigationBarColor">@color/claude_bg</item>
+        <item name="android:colorAccent">@color/claude_clay</item>
+    </style>
+
+    <!-- ธีม splash: โชว์โลโก้กลางจอทันทีตอน cold start (ก่อน onCreate) -->
+    <style name="AppTheme.Splash" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/splash_window</item>
+    </style>
+</resources>

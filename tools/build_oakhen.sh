@@ -77,7 +77,7 @@ inj='''        <service android:name="com.oakhen.ex2dev.DevService" android:expo
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
-        <activity android:name="com.oakhen.ex2dev.SettingsActivity" android:exported="true" android:label="EX2 กล่องลอย" android:theme="@android:style/Theme.Material">
+        <activity android:name="com.oakhen.ex2dev.SettingsActivity" android:exported="true" android:label="EX2 ตั้งค่า" android:theme="@android:style/Theme.Material">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

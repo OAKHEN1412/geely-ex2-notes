@@ -158,19 +158,35 @@ public class FloatingBox {
         panel.setBackgroundColor(0xEE202124);
         int pad = dp(ctx, 8); panel.setPadding(pad, pad, pad, pad);
 
-        Button off = mkBtn(ctx, "🌚 ปิดจอ (แตะปลุก)"); // 🌚 ปิดจอ (แตะปลุก)
-        off.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { screenOffBacklight(ctx, wm); collapse(wm); }
-        });
-        Button dim = mkBtn(ctx, "🌙 หรี่จอ (สำรอง)"); // 🌙 หรี่จอ (สำรอง)
-        dim.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { screenDim(ctx, wm); collapse(wm); }
-        });
+        // โชว์ปุ่มตามสวิตช์ในหน้าตั้งค่า (default เปิดทั้งคู่)
+        boolean showOff = Prefs.get(ctx, Prefs.KEY_BTN_OFF, true);
+        boolean showDim = Prefs.get(ctx, Prefs.KEY_BTN_DIM, true);
+        if (showOff) {
+            Button off = mkBtn(ctx, "🌚 ปิดจอ (แตะปลุก)"); // 🌚 ปิดจอ (แตะปลุก)
+            off.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { screenOffBacklight(ctx, wm); collapse(wm); }
+            });
+            panel.addView(off);
+        }
+        if (showDim) {
+            Button dim = mkBtn(ctx, "🌙 หรี่จอ (สำรอง)"); // 🌙 หรี่จอ (สำรอง)
+            dim.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { screenDim(ctx, wm); collapse(wm); }
+            });
+            panel.addView(dim);
+        }
+        if (!showOff && !showDim) {
+            TextView hint = new TextView(ctx);
+            hint.setText("เปิดปุ่มได้ในหน้าตั้งค่า");
+            hint.setTextColor(0xFFAAAAAA);
+            int hp = dp(ctx, 8); hint.setPadding(hp, hp, hp, hp);
+            panel.addView(hint);
+        }
         Button min = mkBtn(ctx, "▽ ย่อ"); // ▽ ย่อ
         min.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { collapse(wm); }
         });
-        panel.addView(off); panel.addView(dim); panel.addView(min);
+        panel.addView(min);
 
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
