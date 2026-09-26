@@ -2,6 +2,26 @@
 
 _เขียน 2026-08-21 ปลายเซสชัน · ผู้ใช้ GitHub OAKHEN1412 · ภาษาไทย_
 
+## อัปเดต 2026-09-27 (ดึก) — รถคันใหม่ ลงจริงแล้ว (SW0E22H0306H111400000 / XDSN IHU629G0MAT43…)
+- **ปลดล็อก USB**: ได้ผลเมื่อใช้ **zip ต้นฉบับแตกทั้งก้อนไม่แก้อะไร** (ตรง Drive ทุกไบต์) บน USB ที่ fat32format เต็มแท่ง — ก่อนหน้านั้นทุกแบบ (ย้าย/เพิ่มโฟลเดอร์ sbdUpgrade, วางราก) ขึ้น "ensure udisk plugged … \sbdUpgrade\OS" ทั้งหมด · สาเหตุจริงยังไม่รู้แน่ (USB เดิมเป็นพาร์ทิชัน 32GB บนแท่ง 64GB อดีต ESD-USB)
+- ลงแล้ว: EX2 BY OAKHEN (system, userId=1000) + ex2_backlight.rc (trigger ใช้ได้: sys.ex2bl=54 → node 54) · SmartTube · GApps core · **Play Services 26.34.67 (100400) ลงทับเป็น update** · YouTube **20.51.39** (ตัวสุดท้ายที่ minSdk 28; 21.x = minSdk 29) · YouTube Music 9.38.51 · Disney+ 26.12 (split: base+arm64+en+th+mdpi) · Cromite 120 (claude.ai, grant mic)
+- **Play Store ใช้ไม่ได้**: จอประกาศ `android.hardware.type.automotive` → Phonesky มือถือเปิด AccessRestrictedActivity · **ห้ามลบ feature นี้**: `android.car.Car.createCar` เช็ก feature แล้วคืน null (ยืนยันจาก android.car.jar ของจอ) = แอพ Geely/กระจก/ReverseWatch พังหมด → ลงแอพด้วย APK ตรง (APKPure `d.apkpure.com/b/APK/<pkg>?versionCode=` ได้ · APKMirror บล็อก curl)
+- **GMS 26.34 crash วน** (CrossProfileApps null ใน PhoneHubChimeraService) → `pm disable com.google.android.gms/…auth.proximity.phonehub.PhoneHubService` + `…PhoneHubNotificationListenerService` → 0 crash/90 วิ
+- ค้าง: **Google Maps 26.38 crash** ตอน resume (NPE getClass) ถัดจาก `No service published for: batteryproperties` → สงสัย BatteryManager=null (จอไม่มี healthd?) ยังไม่ยืนยัน (adb หลุด) · Disney+ จอไม่มี Widevine (มีแค่ clearkey/mock) = น่าจะเล่นไม่ได้ ยังไม่ลอง · ยังไม่รัน test-screen-off.sh
+- ลายเซ็นที่เช็กแล้ว: YouTube `3D:7A:12:23…8F:99:4A` · GMS/Maps `F0:FD:6C:5B…60:DB:83`
+
+## อัปเดต 2026-09-27 — build ใหม่ (ยังไม่ลงจอ) · ชุดลงแอพ `_install-bundle/`
+- **กระจกลดทีละสเต็ปตอนเปิดประตู**: `WindowStepper.java` + hook smali ใน `AutoWindowController` (drop→stepper, close→cancel) ผ่าน `devkit/patch_autowindow.sh` · ปรับที่จอ: `setprop persist.ex2.win.step 4` (%/สเต็ป, 0=แบบเดิม) `persist.ex2.win.ms 300` · log tag `EX2WinStep`
+- **ปุ่มปิดจอ แก้ตามซอร์ส AOSP 9**: overlay ดำ → `TYPE_SYSTEM_ERROR` (layer 26 เหนือ status 17/nav 23; APPLICATION_OVERLAY=12 อยู่ใต้แถบ แตะแถบไม่ปลุก) + `WATCH_OUTSIDE_TOUCH` + `KEEP_SCREEN_ON` (กัน sleep จริง=ทัชตาย) + ปลุกที่ ACTION_DOWN/OUTSIDE + addView ก่อนดับไฟ + crash guard คืนแสง
+- toolchain durable แล้วที่ `_build/toolchain/` (JDK17, smali/baksmali, r8, android28) — `export JAVA=.../_build/toolchain/jdk-17.0.20.1+1/bin/java.exe`
+- **เทสที่รถ**: แตะ status bar/dock ตอนจอดับต้องติด · `dumpsys window windows | grep -A3 EX2` ดูกรอบ overlay · `_install-bundle/test-screen-off.sh` = ชุดพิสูจน์ (node=0, rc, เกียร์ R, กรอบ overlay)
+- **เกียร์ R ตอนจอดับ = เปิดจอเอง**: `ReverseWatch.java` อ่าน GEAR_SELECTION 289408000 / CURRENT_GEAR 289408001 ทุก 250ms เฉพาะตอนจอดับ (R=2) · เชื่อม car ทางเดียวกับ CarVhalBindings (createCar(Context)/getIntProperty(int,int)) · prewarm ตอน service start · log tag `EX2Reverse`
+- **Wi-Fi เปิดเสมอ**: `WifiKeeper.java` (สวิตช์ "Wi-Fi เปิดเสมอ" default เปิด, ไม่ผูกกล่องลอย) — บูต setWifiEnabled(true) ×3 ครั้ง, ถูกปิด→เปิดคืน 3 วิ, ยังไม่ต่อ→startScan ทุก 20 วิ · log `EX2Wifi` · install.ps1 สั่ง `svc wifi enable` + `wifi_scan_always_enabled=1` · ดับรถ = วิทยุดับตามฮาร์ดแวร์ ทำไม่ได้
+- **รอบ bug-hunt (ตรวจกับซอร์สจริง)** แก้แล้ว: WindowStepper race (สเต็ปเขียนหลังคำสั่งปิด → กระจกค้างเปิด) ใส่ WRITE_LOCK · WifiKeeper ไม่แตะเมื่อ hotspot เปิด (AOSP9 ยอมให้ NETWORK_SETTINGS toggle ทับ SoftAP) / เครื่องบิน / จอไม่ interactive + SCREEN_ON trigger · install.ps1: PS5.1 `2>&1`+Stop โยน exception (ทดสอบจริง) → ฟังก์ชัน A ใช้ Continue, `@()` กัน .Count hashtable · สคริปต์ bash: `S ... ||` ไม่เคย fail เพราะ exit code เป็นของ `tr` → เช็กจากข้อความ · install-gapps เช็ก gsf/vending/backuptransport ซ้ำ
+- ยังต้องยืนยันที่รถ: ความสว่างหลังปลุก = ก่อนปิด (คืนค่าจาก screen_brightness; ถ้าโหมดอัตโนมัติอาจไม่ตรง) — test-screen-off ข้อ 6 · ไฟจอกลับมาเองถ้า DPC เปลี่ยนความสว่าง (โหมดกลางวัน/กลางคืน) ระหว่างดับ
+- ปุ่มปิดจอเตือน Toast ถ้าไม่มี `/system/etc/init/ex2_backlight.rc` (= ไฟไม่ดับจริง)
+- GApps: `_install-bundle/gapps/install-gapps.sh` (OpenGApps pico 9.0 core → /system/priv-app) ยังไม่ลง
+
 ## สถานะรวม
 วันนี้สร้าง/แก้เสร็จ **โค้ด+APK พร้อมลงหมด** แต่ **ยังไม่ได้เทสต์บนจอจริง** (adb offline ทั้งวันช่วงหลัง) — พรุ่งนี้ = ต่อ adb → build/install/recon/test
 

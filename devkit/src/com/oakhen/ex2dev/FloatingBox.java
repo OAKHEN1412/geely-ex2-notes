@@ -83,6 +83,7 @@ public class FloatingBox {
         try { b = android.provider.Settings.System.getInt(sApp.getContentResolver(), "screen_brightness", 120); } catch (Throwable ignored) {}
         if (b <= 0) b = 120;
         setProp(PROP, Integer.toString(b));   // ถ้าค้าง "0" -> คืนค่าปกติ
+        prewarmReverse(sApp);
     }
 
     private static void post(final Context ctx, final boolean hide) {
@@ -231,31 +232,78 @@ public class FloatingBox {
     // ---------- 🌚 ปิดจอ ผ่าน flag file -> root daemon (ex2_backlight.sh) เขียน sysfs ----------
     // แอพ system_app แตะ /sys/class/leds ไม่ได้ (SELinux search denied) จึงสั่งผ่าน flag ให้ daemon แทน
 
-    private static void screenOffBacklight(final Context ctx, final WindowManager wm) {
-        if (sBlOff) return;
-        // เก็บ brightness ปัจจุบันไว้คืนตอนปลุก แล้วสั่ง daemon ดับ (flag=0)
-        try { sBlSaved = android.provider.Settings.System.getInt(ctx.getContentResolver(), "screen_brightness", 120); }
-        catch (Throwable t) { sBlSaved = 120; }
-        if (sBlSaved <= 0) sBlSaved = 120;
-        setProp(PROP, "0");   // init เขียน node=0 (คงอยู่เอง ไม่ต้อง re-write ถ้าไม่แตะ Settings)
+    // overlay ดำตอนปิดจอ — ต้อง "แตะตรงไหนก็ปลุก" (เช็กกับซอร์ส AOSP 9 แล้ว):
+    //  - TYPE_SYSTEM_ERROR (layer 26) อยู่เหนือ status bar (17) / nav bar-dock (23) — TYPE_APPLICATION_OVERLAY (12)
+    //    อยู่ใต้แถบพวกนี้ แตะโดนแถบ = ไม่ถึง overlay = ไม่ปลุก · uid system ได้ ADD_OKAY (PhoneWindowManager.checkAddPermission)
+    //  - FLAG_WATCH_OUTSIDE_TOUCH: แตะนอกกรอบ overlay (ส่วนที่ WM ไม่ให้ขยายทับ) ได้ ACTION_OUTSIDE (InputDispatcher)
+    //  - FLAG_KEEP_SCREEN_ON: กัน PowerManager timeout พาจอ sleep จริง — ถ้า sleep ทัชจะไม่ถูกส่งเข้าแอพเลย
+    //  - ปลุกที่ ACTION_DOWN (ไม่รอ click/UP)
+    // ทัชสกรีนไม่ถูกแตะเลย: ดับแค่ node lcd-backlight, จอยัง Awake
+    private static final int TYPE_SYSTEM_ERROR = 2010;   // WindowManager.LayoutParams.TYPE_SYSTEM_ERROR (deprecated)
 
-        final View black = new View(ctx);
-        black.setBackgroundColor(Color.BLACK);
+    private static WindowManager.LayoutParams blackLp(WindowManager wm, int type) {
+        android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-                overlayType(),
+                dm.widthPixels, dm.heightPixels, type,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                        | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                         | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.OPAQUE);
         lp.gravity = Gravity.TOP | Gravity.START; lp.x = 0; lp.y = 0;
-        black.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { screenOnBacklight(); }
-        });
-        wm.addView(black, lp);
-        sBlack = black;
+        return lp;
+    }
 
+    // process ตายตอนจอดับ = overlay หายไปด้วย แต่ backlight ค้าง 0 -> คืนแสงก่อนตาย (DevService START_STICKY กู้ซ้ำอีกชั้น)
+    private static boolean sCrashGuard = false;
+    private static void installCrashGuard() {
+        if (sCrashGuard) return;
+        sCrashGuard = true;
+        final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            public void uncaughtException(Thread t, Throwable e) {
+                try { if (sBlOff) setProp(PROP, Integer.toString(sBlSaved > 0 ? sBlSaved : 120)); } catch (Throwable ignored) {}
+                if (prev != null) prev.uncaughtException(t, e);
+            }
+        });
+    }
+
+    private static void screenOffBacklight(final Context ctx, final WindowManager wm) {
+        if (sBlOff) return;
+        installCrashGuard();
+        try { sBlSaved = android.provider.Settings.System.getInt(ctx.getContentResolver(), "screen_brightness", 120); }
+        catch (Throwable t) { sBlSaved = 120; }
+        if (sBlSaved <= 0) sBlSaved = 120;
+
+        final View black = new View(ctx);
+        black.setBackgroundColor(Color.BLACK);
+        black.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View v, MotionEvent e) {
+                int a = e.getActionMasked();
+                if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_OUTSIDE) screenOnBacklight();
+                return true;   // กิน gesture — ไม่ให้ทัชทะลุไปกดปุ่มรถข้างหลังตอนมืด
+            }
+        });
+        // overlay ต้องขึ้นให้ได้ "ก่อน" ดับไฟ — ถ้าดับก่อนแล้ว addView พัง = จอมืดโดยไม่มีตัวรับแตะปลุก
+        boolean added = false;
+        try { wm.addView(black, blackLp(wm, TYPE_SYSTEM_ERROR)); added = true; }
+        catch (Throwable t) { android.util.Log.w("EX2Dev", "SYSTEM_ERROR overlay failed, fallback", t); }
+        if (!added) {
+            try { wm.addView(black, blackLp(wm, overlayType())); added = true; }
+            catch (Throwable t) { android.util.Log.e("EX2Dev", "black overlay failed — ไม่ดับจอ", t); }
+        }
+        if (!added) return;
+        sBlack = black;
         sBlOff = true;
+        // ไม่มีตัวรับ property ของ init = ไฟจอไม่ดับจริง (เหลือแค่ทับดำ) -> เตือน แต่ยังทำงานต่อ
+        if (!new File(BL_RC).exists()) {
+            try { android.widget.Toast.makeText(ctx, "⚠️ ยังไม่ได้ติดตั้งตัวดับไฟจอ (ex2_backlight.rc) — จอจะแค่ทับดำ ไฟยังติด", android.widget.Toast.LENGTH_LONG).show(); } catch (Throwable ignored) {}
+        }
+        setProp(PROP, "0");   // init เขียน node=0 (คงอยู่เอง ไม่ต้อง re-write ถ้าไม่แตะ Settings)
+        startReverseWatch(ctx);
 
         // watchdog เดี่ยว (ไม่ผูก view) — คืนจอเองใน 10 นาทีถ้าไม่ถูกแตะ
         if (sWatchdog == null) sWatchdog = new Runnable() {
@@ -265,8 +313,51 @@ public class FloatingBox {
         mainH().postDelayed(sWatchdog, 600000);
     }
 
+    static final String BL_RC = "/system/etc/init/ex2_backlight.rc";
+
+    // ---------- เกียร์ R ตอนจอดับ = เปิดจอทันที (กล้องถอย) ----------
+    // อ่านเกียร์ทุก 250ms บน bl thread เฉพาะตอนจอดับ (binder call ไม่ทำบน main)
+    static java.util.concurrent.ScheduledFuture<?> sRevTask;
+
+    /** เชื่อมต่อ car service ไว้ล่วงหน้า (เรียกตอน service start) ให้กดปิดจอแล้วอ่านเกียร์ได้ทันที */
+    static void prewarmReverse(final Context ctx) {
+        final Context app = ctx.getApplicationContext();
+        for (long d : new long[]{0, 2000, 5000}) {   // connect เป็น async — ลองซ้ำให้ทันต่อเสร็จ
+            bl().schedule(new Runnable() {
+                public void run() { try { ReverseWatch.readGear(app); } catch (Throwable ignored) {} }
+            }, d, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void startReverseWatch(Context ctx) {
+        final Context app = ctx.getApplicationContext();
+        stopReverseWatch();
+        final long t0 = System.currentTimeMillis();
+        sRevTask = bl().scheduleWithFixedDelay(new Runnable() {
+            boolean warned = false;
+            public void run() {
+                if (!sBlOff) return;
+                Integer g = null;
+                try { g = ReverseWatch.readGear(app); } catch (Throwable ignored) {}
+                if (ReverseWatch.isReverse(g)) {
+                    android.util.Log.i(ReverseWatch.TAG, "เกียร์ R -> เปิดจอ");
+                    mainH().post(new Runnable() { public void run() { if (sBlOff) screenOnBacklight(); } });
+                } else if (g == null && !warned && System.currentTimeMillis() - t0 > 3000) {
+                    warned = true;
+                    android.util.Log.w(ReverseWatch.TAG, "อ่านเกียร์ไม่ได้ >3s — เข้า R จะไม่เปิดจอเอง");
+                }
+            }
+        }, 0, 250, TimeUnit.MILLISECONDS);
+    }
+
+    private static void stopReverseWatch() {
+        java.util.concurrent.ScheduledFuture<?> f = sRevTask; sRevTask = null;
+        if (f != null) f.cancel(false);
+    }
+
     private static void screenOnBacklight() {
         sBlOff = false;
+        stopReverseWatch();
         // สั่ง init คืน backlight = ค่าที่บันทึกไว้ (property เปลี่ยนจาก "0" -> trigger เขียน node)
         setProp(PROP, Integer.toString(sBlSaved > 0 ? sBlSaved : 120));
         if (sWatchdog != null) mainH().removeCallbacks(sWatchdog);

@@ -29,6 +29,8 @@ public class DevService extends Service {
             final android.content.Context app = getApplicationContext();
             // กู้ backlight เผื่อค้างดำจากรอบก่อน (process ตายตอนปิดจอ)
             try { FloatingBox.recoverBacklight(app); } catch (Throwable ignored) {}
+            // Wi-Fi เปิดเสมอ + สแกนหาเครือข่ายเดิม (ตามสวิตช์ในหน้าตั้งค่า)
+            try { WifiKeeper.start(app); } catch (Throwable t) { Log.e(TAG, "WifiKeeper", t); }
             // โผล่กล่องตอนบูตเฉพาะเมื่อ เปิดกล่องลอย + เปิด "เริ่มอัตโนมัติหลังบูต" (สวิตช์แยกในหน้าตั้งค่า)
             if (Prefs.get(app, Prefs.KEY_FLOATING, true) && Prefs.get(app, Prefs.KEY_AUTOSTART, true)) {
                 new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {

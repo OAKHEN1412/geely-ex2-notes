@@ -96,8 +96,19 @@ public class SettingsActivity extends Activity {
                 "ในเมนูกล่อง — หรี่จอ (สำรอง) แตะปลุก", Prefs.KEY_BTN_DIM, true);
         btnDim.setOnCheckedChangeListener(saver(Prefs.KEY_BTN_DIM));
 
-        infoRow(root, "กระจกไว 300ms",
-                "ลดกระจกเร็วขึ้นเมื่อเปิดประตูรถจอด · ทำงานอัตโนมัติ (ฝังในแอป)");
+        // ไม่ใช่ลูกของกล่องลอย (row child=false) — ปิดกล่องลอยแล้ว Wi-Fi ยังเปิดเสมอได้
+        Switch wifi = row(root, "Wi-Fi เปิดเสมอ",
+                "เปิด Wi-Fi เองเมื่อสตาร์ทรถ + หาเครือข่ายที่เคยต่ออัตโนมัติ · ปิดสวิตช์นี้ถ้าจะปิด Wi-Fi เอง",
+                Prefs.KEY_WIFI_ON, true, false);
+        wifi.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
+                Prefs.of(SettingsActivity.this).edit().putBoolean(Prefs.KEY_WIFI_ON, on).apply();
+                if (on) WifiKeeper.ensureOn();
+            }
+        });
+
+        infoRow(root, "กระจกค่อยๆ ลงตอนเปิดประตู",
+                "ลดทีละสเต็ปจนถึง 20% · ปิดประตูกลางทาง = หยุดแล้วปิดกระจก · ทำงานอัตโนมัติ (ฝังในแอป)");
 
         // ========== B) ฟีเจอร์รถ (แอพเดิม Geely) ==========
         sectionLabel(root, "ฟีเจอร์รถ · แอพเดิม (Geely)");

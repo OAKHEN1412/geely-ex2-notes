@@ -11,6 +11,7 @@ public final class Prefs {
     public static final String KEY_AUTOSTART = "auto_start";       // โผล่เองหลังบูต
     public static final String KEY_BTN_OFF   = "btn_screenoff";    // ปุ่ม 🌚 ปิดจอ ในเมนูกล่อง
     public static final String KEY_BTN_DIM   = "btn_dim";          // ปุ่ม 🌙 หรี่จอ ในเมนูกล่อง
+    public static final String KEY_WIFI_ON   = "wifi_always_on";   // Wi-Fi เปิดเสมอ + สแกนหาเครือข่ายเดิม (ไม่ขึ้นกับกล่องลอย)
 
     private Prefs() {}
 

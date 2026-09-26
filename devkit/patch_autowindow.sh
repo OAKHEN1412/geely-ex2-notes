@@ -12,7 +12,7 @@
 set -e
 REPO="/c/Users/Pishe/Desktop/geely-ex2-notes"
 NEW_HEX="0x12c"  # 300ms — แก้ได้ (0xfa=250, 0x96=150, 0x64=100). ต้องอยู่ในช่วง const-wide/16 (<=0x7fff)
-JAVA="${JAVA:-$(ls -d /c/Users/*/AppData/Local/Temp/claude/*/*/scratchpad/devkit/jdk/jdk-*/bin/java.exe 2>/dev/null | head -1)}"
+JAVA="${JAVA:-$(ls -d "$REPO"/_build/toolchain/jdk-*/bin/java.exe /c/Users/*/AppData/Local/Temp/claude/*/*/scratchpad/devkit/jdk/jdk-*/bin/java.exe 2>/dev/null | head -1)}"
 [ -n "$JAVA" ] && command -v "$JAVA" >/dev/null 2>&1 || { echo "!!! set env JAVA ให้ชี้ java.exe (JDK 17)"; exit 1; }
 
 W="$REPO/_build/autowindow"; mkdir -p "$W"; cd "$W"
@@ -42,6 +42,45 @@ N=$(grep -c "const-wide/16 v2, 0x7d0" "$F")
 [ "$N" = "1" ] || { echo "!!! คาด 0x7d0 จุดเดียว แต่เจอ $N จุด — หยุด (โครง smali เปลี่ยน/ค่าซ้ำ)"; exit 1; }
 sed -i "s/const-wide\/16 v2, 0x7d0/const-wide\/16 v2, $NEW_HEX/" "$F"
 grep -q "const-wide/16 v2, $NEW_HEX" "$F" || { echo "!!! ไม่พบจุดแก้หลัง sed"; exit 1; }
+
+echo ">>> ลดกระจกทีละสเต็ป: hook AutoWindowController -> com.oakhen.ex2dev.WindowStepper (อยู่ใน classes17)"
+C="smali9/com/geely/ex2/tools/data/window/AutoWindowController.smali"
+py -X utf8 - "$(cygpath -w "$W/$C")" <<'PY'
+import sys, io
+p = sys.argv[1]; s = io.open(p, encoding='utf-8').read()
+WS = 'Lcom/geely/ex2/tools/data/window/AutoWindowController;'
+
+# 1) dropWindowOnDoorOpen: ก่อน writeWindow(corner, target) ให้ WindowStepper รับงาน (v4 = % ปัจจุบัน, v3 = target)
+old = f'''    :cond_70
+    new-instance v1, Ljava/lang/StringBuilder;'''
+new = f'''    :cond_70
+    iget-object v1, p0, {WS}->doorWindow:Lcom/geely/ex2/tools/data/vhal/CarPropertyDoorWindowController;
+
+    invoke-static {{v1, p1, v4, v3}}, Lcom/oakhen/ex2dev/WindowStepper;->drop(Ljava/lang/Object;Ljava/lang/Object;II)Z
+
+    move-result v1
+
+    if-eqz v1, :cond_ex2_single
+
+    return-void
+
+    :cond_ex2_single
+    new-instance v1, Ljava/lang/StringBuilder;'''
+i = s.index('.method private final dropWindowOnDoorOpen(')
+j = s.index('.end method', i)
+body = s[i:j]
+assert body.count(old) == 1, 'dropWindowOnDoorOpen: ไม่เจอจุด :cond_70 แบบคาด'
+assert 'const/16 v3, 0x14' in body and 'invoke-virtual {v0}, Ljava/lang/Integer;->intValue()I' in body
+s = s[:i] + body.replace(old, new) + s[j:]
+
+# 2) closeWindowOnDoorClose: ยกเลิกสเต็ปที่ค้างก่อนเริ่มปิด
+i = s.index('.method private final closeWindowOnDoorClose(')
+k = s.index('    .line 149', i)
+s = s[:k] + '    invoke-static {p1}, Lcom/oakhen/ex2dev/WindowStepper;->cancel(Ljava/lang/Object;)V\n\n' + s[k:]
+
+io.open(p, 'w', encoding='utf-8').write(s)
+print('    hook drop:', 'WindowStepper;->drop' in s, '| hook cancel:', 'WindowStepper;->cancel' in s)
+PY
 
 echo ">>> smali reassemble -> classes9-autowindow.dex"
 "$JAVA" -cp "$CP" org.jf.smali.Main a -a 28 smali9 -o "$REPO/devkit/prebuilt/classes9-autowindow.dex"

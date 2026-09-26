@@ -19,3 +19,8 @@ devkit/prebuilt/*.dex
 devkit/plugins/out/
 devkit/plugins/build/
 _apps/
+
+# git repo ของคนอื่น (swimapps/CentralEXAuto) — ไม่ commit ซ้อน
+_CentralEXAuto/
+# ไฟล์ Google (OpenGApps core) — โหลดใหม่ได้ ไม่เก็บใน repo
+_install-bundle/gapps/system/
