@@ -79,6 +79,10 @@ final class SplitBackButtons {
                     int[] ids = new int[tasks.size()];
                     for (int k = 0; k < ids.length; k++) ids[k] = tasks.get(k)[1];
                     SplitDividers.show(app, ids, rects);
+                } else if (rects != null && rects.length == 3 && SplitScreen.isCarPlayLayout(apps)) {
+                    int[] ids = {-1, -1, -1};
+                    for (int[] it : tasks) ids[it[0]] = it[1];
+                    if (ids[1] >= 0) CarPlayDivider.show(app, apps, ids, rects);   // ลากปรับความกว้าง CarPlay
                 }
                 WindowManager wm = (WindowManager) app.getSystemService(Context.WINDOW_SERVICE);
                 for (int[] it : tasks) {
@@ -130,6 +134,7 @@ final class SplitBackButtons {
         }
         sBtns.clear();
         SlotPicker.clearAll(app);
+        CarPlayDivider.clear(app);
         sPickerRects.clear();
         if (sTick != null) main().removeCallbacks(sTick);
     }
@@ -208,6 +213,7 @@ final class SplitBackButtons {
                 boolean vis = SplitBackdropActivity.isVisible();
                 SlotPicker.setVisible(vis);
                 SplitDividers.setVisible(vis);
+                CarPlayDivider.setVisible(vis);
                 // อ่านตำแหน่งหน้าต่างบนเธรดเบื้องหลัง (binder) แล้วค่อยวางปุ่มบน main
                 final List<Btn> snap = new ArrayList<Btn>(sBtns);
                 SplitScreen.worker().post(new Runnable() {
@@ -234,16 +240,8 @@ final class SplitBackButtons {
             Btn b = snap.get(i);
             if (!sBtns.contains(b)) continue;
             Rect r = rs.get(i);
-            if (!alive.get(i)) {           // ปิดหน้าต่างแล้ว → ลบปุ่ม + เส้นแบ่ง แล้วให้เลือกแอพมาแทนในช่องนั้น
-                if (b.shown) { try { wm.removeView(b.view); } catch (Throwable ignored) {} }
-                sBtns.remove(b);
-                SplitDividers.clear(app);
-                if (sBtns.isEmpty()) {     // ปิดครบทุกหน้าต่าง → ออกจากแบ่งจอ
-                    clearNow(app);
-                    SplitBackdropActivity.dismiss();
-                    return;
-                }
-                showPicker(app, b.slot, b.lastRect);
+            if (!alive.get(i)) {
+                if (gone(app, b)) return;
                 continue;
             }
             // ไม่รู้ตำแหน่ง / เต็มจอ (กดขยาย) → ซ่อน
@@ -267,6 +265,43 @@ final class SplitBackButtons {
         }
     }
 
+    /** เรียกบน main thread · หน้าต่างของปุ่ม b ปิดไปแล้ว → ลบปุ่ม + เส้นแบ่ง แล้วให้เลือกแอพมาแทนในช่องนั้น
+     *  true = ปิดครบทุกช่อง (ออกจากแบ่งจอแล้ว) */
+    private static boolean gone(Context app, Btn b) {
+        if (!sBtns.contains(b)) return false;
+        WindowManager wm = (WindowManager) app.getSystemService(Context.WINDOW_SERVICE);
+        if (b.shown) { try { wm.removeView(b.view); } catch (Throwable ignored) {} b.shown = false; }
+        sBtns.remove(b);
+        SplitDividers.clear(app);
+        if (b.pkg.startsWith(SplitScreen.CARPLAY_PKG)) CarPlayDivider.clear(app);
+        if (sBtns.isEmpty()) {     // ปิดครบทุกหน้าต่าง → ออกจากแบ่งจอ
+            clearNow(app);
+            SplitBackdropActivity.dismiss();
+            return true;
+        }
+        showPicker(app, b.slot, b.lastRect);
+        return false;
+    }
+
+    /** หลังกด ◀: เฝ้าดู task ถี่ ๆ ~1.5 วิ — แอพปิดตัว (ย้อนจนสุด) → ขึ้นตัวเลือกแอพทันที ไม่ต้องรอรอบ 1 วิ (เห็นจอดำ) */
+    private static void watchGone(final Context app, final int task) {
+        new Thread(new Runnable() {
+            public void run() {
+                for (int i = 0; i < 50; i++) {
+                    SystemClock.sleep(30);
+                    if (!taskAlive(app, task)) {
+                        main().post(new Runnable() {
+                            public void run() {
+                                for (Btn b : new ArrayList<Btn>(sBtns)) if (b.task == task) gone(app, b);
+                            }
+                        });
+                        return;
+                    }
+                }
+            }
+        }, "ex2-back-watch").start();
+    }
+
     private static void back(final Context app, final int task) {
         SplitScreen.worker().post(new Runnable() {
             public void run() {
@@ -276,6 +311,7 @@ final class SplitBackButtons {
                 } catch (Throwable t) { Log.w(TAG, "setFocusedTask " + task, t); }
                 SystemClock.sleep(80);
                 injectBack();
+                watchGone(app, task);
                 Log.i(TAG, "back -> task " + task);
             }
         });

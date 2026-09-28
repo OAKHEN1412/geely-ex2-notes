@@ -115,6 +115,7 @@ final class SplitScreen {
     // ---------- CarPlay: ภาพจาก iPhone ตายตัว 1920×968 (log [DADAO_CP] mViewArea) — ย่อแล้วต้องคงสัดส่วน ไม่งั้นถูกบีบ ----------
     static final String CARPLAY_PKG = "com.njda.carplay";
     static final int CP_W = 1920, CP_H = 968, CP_WIN_W = 1280;
+    static final String K_CP_W = "split_cp_w";   // ความกว้าง CarPlay ที่ผู้ใช้ลากไว้ล่าสุด = ค่าเริ่มต้นครั้งต่อไป
 
     static boolean isCarPlay(ComponentName c) { return c != null && CARPLAY_PKG.equals(c.getPackageName()); }
 
@@ -136,17 +137,13 @@ final class SplitScreen {
 
     /** ชุดที่ arrange แล้ว → กรอบแต่ละช่อง */
     static Rect[] layoutFor(Context c, List<ComponentName> apps) {
-        if (apps.size() != 3 || !isCarPlay(apps.get(1))) return layout(c, apps.size());
-        Rect full = layout(c, 1)[0];
-        int gap = 4;
-        int cpW = Math.min(CP_WIN_W, full.width() - 400);
-        int cpH = cpW * CP_H / CP_W;
-        int x = full.right - cpW;
-        return new Rect[]{
-                new Rect(full.left, full.top, x - gap, full.bottom),
-                new Rect(x, full.top, full.right, full.top + cpH),
-                new Rect(x, full.top + cpH + gap, full.right, full.bottom)};
+        if (!isCarPlayLayout(apps)) return layout(c, apps.size());
+        Rect[] out = {new Rect(), new Rect(), new Rect()};
+        CarPlayDivider.compute(layout(c, 1)[0], Prefs.of(c).getInt(K_CP_W, CP_WIN_W), out);
+        return out;
     }
+
+    static boolean isCarPlayLayout(List<ComponentName> apps) { return apps.size() == 3 && isCarPlay(apps.get(1)); }
 
     /** กรอบเรียงเป็นแถวเดียวซ้าย→ขวา (เส้นแบ่งลากได้เฉพาะแบบนี้) */
     static boolean isRow(Rect[] r) {
