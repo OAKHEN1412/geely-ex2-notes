@@ -212,6 +212,7 @@ public class SplitActivity extends Activity {
         final Context app = getApplicationContext();
         final Rect[] r = SplitScreen.layout(app, apps.size());
         finish();   // ออกจากหน้านี้ก่อน ไม่ให้บังหน้าต่างที่เปิด
+        SplitBackButtons.clear(app);
         SplitScreen.showBackdrop(app);   // พื้นดำเต็มจอข้างหลัง — ไม่เห็นวอลเปเปอร์
         // สั่งหน้าต่าง (binder: getRunningTasks/setTaskWindowingMode/resizeTask/startActivity) บนเธรดเบื้องหลัง
         // — เดิมทำบน main: วัดบนรถได้เฟรมช้าสุด 650ms (gfxinfo 99th) ทั้งแอพหน่วงตอนเปิดแบ่งจอ
@@ -236,6 +237,10 @@ public class SplitActivity extends Activity {
                 public void run() { SplitScreen.enforce(app, apps, r); }
             }, d);
         }
+        // ปุ่ม ◀ ย้อนกลับบนแถบบนของแต่ละหน้าต่าง (หลังจัดกรอบเสร็จ)
+        h.postDelayed(new Runnable() {
+            public void run() { SplitBackButtons.show(app, apps); }
+        }, 350L * apps.size() + 3300);
     }
 
     private static List<ComponentName> parse(String s) {

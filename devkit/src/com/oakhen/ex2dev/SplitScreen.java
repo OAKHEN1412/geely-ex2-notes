@@ -159,6 +159,7 @@ final class SplitScreen {
     /** คืนทุกแอพที่อยู่ในหน้าต่างอิสระกลับเป็นเต็มจอ */
     static void exitAll(Context c) {
         SplitBackdropActivity.dismiss();
+        SplitBackButtons.clear(c);
         try {
             ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
             for (ActivityManager.RunningTaskInfo t : am.getRunningTasks(30)) {
