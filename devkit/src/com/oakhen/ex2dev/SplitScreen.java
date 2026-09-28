@@ -130,8 +130,22 @@ final class SplitScreen {
         }
     }
 
+    /** เปิดพื้นหลังดำเต็มจอ (บังวอลเปเปอร์) — ต้องเปิดก่อนแอพที่แบ่ง */
+    static void showBackdrop(Context c) {
+        try {
+            Intent i = new Intent(c, SplitBackdropActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            ActivityOptions o = ActivityOptions.makeBasic();
+            try {   // บังคับเต็มจอ — เปิด freeform ไว้ ระบบอาจเปิดเป็นหน้าต่าง
+                ActivityOptions.class.getMethod("setLaunchWindowingMode", int.class).invoke(o, WINDOWING_MODE_FULLSCREEN);
+            } catch (Throwable t) { Log.w(TAG, "backdrop windowing mode", t); }
+            c.startActivity(i, o.toBundle());
+        } catch (Throwable t) { Log.w(TAG, "backdrop", t); }
+    }
+
     /** คืนทุกแอพที่อยู่ในหน้าต่างอิสระกลับเป็นเต็มจอ */
     static void exitAll(Context c) {
+        SplitBackdropActivity.dismiss();
         try {
             ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
             for (ActivityManager.RunningTaskInfo t : am.getRunningTasks(30)) {

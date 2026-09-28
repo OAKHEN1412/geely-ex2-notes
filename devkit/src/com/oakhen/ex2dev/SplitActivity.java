@@ -208,6 +208,7 @@ public class SplitActivity extends Activity {
         final Context app = getApplicationContext();
         final Rect[] r = SplitScreen.layout(app, apps.size());
         finish();   // ออกจากหน้านี้ก่อน ไม่ให้บังหน้าต่างที่เปิด
+        SplitScreen.showBackdrop(app);   // พื้นดำเต็มจอข้างหลัง — ไม่เห็นวอลเปเปอร์
         final Handler h = new Handler(Looper.getMainLooper());
         for (int i = 0; i < apps.size(); i++) {
             final int k = i;
