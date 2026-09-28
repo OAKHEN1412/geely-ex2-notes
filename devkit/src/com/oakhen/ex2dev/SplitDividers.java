@@ -73,6 +73,11 @@ final class SplitDividers {
         }
     }
 
+    /** เรียกบน main thread */
+    static void setVisible(boolean on) {
+        for (View v : sViews) v.setVisibility(on ? View.VISIBLE : View.GONE);
+    }
+
     static void clear(final Context ctx) {
         main().post(new Runnable() { public void run() { clearNow(ctx.getApplicationContext()); } });
     }

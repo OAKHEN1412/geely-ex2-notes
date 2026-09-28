@@ -37,7 +37,17 @@ public class SplitBackdropActivity extends Activity {
         setContentView(root);
     }
 
+    private static volatile boolean sVisible;
+
+    /** พื้นดำยังมองเห็นอยู่ = แบ่งจอยังอยู่บนจอ (ไม่ถูกหน้าหลัก/แอพเต็มจอบัง) */
+    static boolean isVisible() { return sVisible; }
+
+    @Override protected void onStart() { super.onStart(); sVisible = true; }
+    @Override protected void onStop() { super.onStop(); sVisible = false; }
+
     private void goHome() {
+        SplitBackButtons.clear(this);   // ปุ่ม/ตัวเลือกแอพ ไม่ลอยค้างบนหน้าหลัก
+        SplitDividers.clear(this);
         finish();
         try {
             startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)

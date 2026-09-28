@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.InputDevice;
 import android.view.KeyCharacterMap;
@@ -20,13 +21,17 @@ import android.view.WindowManager;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * ปุ่ม ◀ ย้อนกลับ บนแถบบนของแต่ละหน้าต่างแบ่งจอ
  *  - กด: setFocusedTask(task) → ส่ง KEYCODE_BACK (InputManager.injectInputEvent, uid system มี INJECT_EVENTS)
  *    ปุ่ม back ของระบบจะไปที่หน้าต่างที่ focus อยู่ → โฟกัสหน้าต่างนั้นก่อนแล้วค่อยส่ง
- *  - ตามตำแหน่งหน้าต่างทุก 1 วิ (getTaskBounds) · task หาย/กลายเป็นเต็มจอ = ซ่อน/ลบปุ่ม
+ *  - ตามตำแหน่งหน้าต่างทุก 1 วิ (getTaskBounds) · task กลายเป็นเต็มจอ = ซ่อนปุ่ม
+ *  - task หาย (ปิด/crash/◀ จนหลุดแอพ) หรือเปิดไม่ขึ้น → ช่องนั้นแสดงตารางแอพ (SlotPicker) ให้เลือกแอพมาแทน
+ *    ปิดหมดทุกช่อง = ออกจากแบ่งจอ
  */
 final class SplitBackButtons {
     static final String TAG = "EX2SplitBack";
@@ -35,9 +40,17 @@ final class SplitBackButtons {
     private static Runnable sTick;
 
     private static final class Btn {
-        final String pkg; final int task; final TextView view; final WindowManager.LayoutParams lp; boolean shown;
-        Btn(String pkg, int task, TextView v, WindowManager.LayoutParams lp) { this.pkg = pkg; this.task = task; this.view = v; this.lp = lp; }
+        final int slot; final String pkg; final int task; final TextView view; final WindowManager.LayoutParams lp; boolean shown;
+        Rect lastRect;   // กรอบล่าสุดที่เห็น (ลากเส้นแบ่งแล้วกรอบเปลี่ยน) — ใช้วางตัวเลือกแอพเมื่อ task หาย
+        Btn(int slot, String pkg, int task, TextView v, WindowManager.LayoutParams lp, Rect r) {
+            this.slot = slot; this.pkg = pkg; this.task = task; this.view = v; this.lp = lp; this.lastRect = r;
+        }
     }
+
+    /** ชุดแบ่งจอปัจจุบัน (ช่อง → แอพ, กรอบเริ่มต้น) + กรอบของช่องที่กำลังแสดงตัวเลือกแอพ */
+    private static List<ComponentName> sApps;
+    private static Rect[] sSlotRects;
+    private static final SparseArray<Rect> sPickerRects = new SparseArray<Rect>();
 
     private SplitBackButtons() {}
 
@@ -57,6 +70,9 @@ final class SplitBackButtons {
         main().post(new Runnable() {
             public void run() {
                 clearNow(app);
+                sApps = new ArrayList<ComponentName>(apps);
+                sSlotRects = rects;
+                SlotPicker.preload(app, null);
                 // เส้นแบ่ง (ลาก=ปรับขนาด, แตะ ⇄=สลับ) — เฉพาะเมื่อเจอ task ครบทุกช่อง
                 if (rects != null && tasks.size() == apps.size() && apps.size() >= 2) {
                     int[] ids = new int[tasks.size()];
@@ -84,8 +100,17 @@ final class SplitBackButtons {
                             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                             PixelFormat.TRANSLUCENT);
                     lp.gravity = Gravity.TOP | Gravity.START;
-                    Btn b = new Btn(pkg, task, v, lp);
+                    Btn b = new Btn(it[0], pkg, task, v, lp, rects != null && it[0] < rects.length ? new Rect(rects[it[0]]) : null);
                     sBtns.add(b);
+                }
+                // ช่องที่แอพเปิดไม่ขึ้น → ตัวเลือกแอพทันที (ถ้าไม่ขึ้นเลยสักแอพ ไม่ต้องค้างพื้นดำ)
+                if (tasks.isEmpty()) { SplitBackdropActivity.dismiss(); return; }
+                if (rects != null) {
+                    for (int i = 0; i < apps.size() && i < rects.length; i++) {
+                        boolean has = false;
+                        for (int[] it : tasks) if (it[0] == i) has = true;
+                        if (!has) showPicker(app, i, rects[i]);
+                    }
                 }
                 startTicking(app);
             }
@@ -103,7 +128,63 @@ final class SplitBackButtons {
             if (b.shown) { try { wm.removeView(b.view); } catch (Throwable ignored) {} }
         }
         sBtns.clear();
+        SlotPicker.clearAll(app);
+        sPickerRects.clear();
         if (sTick != null) main().removeCallbacks(sTick);
+    }
+
+    /** ช่องว่าง → ตารางแอพในกรอบช่อง · แตะแอพ = เปิดเข้าช่องนั้นแล้วจัดปุ่ม/เส้นแบ่งใหม่ทั้งชุด */
+    private static void showPicker(final Context app, int slot, Rect r) {
+        if (r == null || SlotPicker.showing(slot)) return;
+        Set<String> used = new HashSet<String>();
+        for (Btn b : sBtns) used.add(b.pkg);
+        sPickerRects.put(slot, new Rect(r));
+        SlotPicker.show(app, slot, r, used, new SlotPicker.OnPick() {
+            public void pick(int s, ComponentName cn) { replace(app, s, cn); }
+        });
+    }
+
+    /** เรียกบน main thread (จากตัวเลือกแอพ) */
+    private static void replace(final Context app, final int slot, final ComponentName cn) {
+        if (sApps == null || slot >= sApps.size()) return;
+        // กรอบทุกช่อง ณ ตอนนี้: ช่องที่มีแอพ = กรอบล่าสุดของหน้าต่าง, ช่องว่าง = กรอบที่ตัวเลือกแอพใช้
+        final Rect[] rects = new Rect[sApps.size()];
+        for (int i = 0; i < rects.length; i++) {
+            Rect pr = sPickerRects.get(i);
+            if (pr != null) rects[i] = new Rect(pr);
+            else if (sSlotRects != null && i < sSlotRects.length) rects[i] = new Rect(sSlotRects[i]);
+        }
+        for (Btn b : sBtns) if (b.lastRect != null && b.slot < rects.length) rects[b.slot] = new Rect(b.lastRect);
+        if (rects[slot] == null) return;
+        sPickerRects.remove(slot);
+        sApps.set(slot, cn);
+        final List<ComponentName> apps = new ArrayList<ComponentName>(sApps);
+        StringBuilder sb = new StringBuilder();
+        for (ComponentName c : apps) sb.append(sb.length() > 0 ? "|" : "").append(c.flattenToString());
+        Prefs.of(app).edit().putString(SplitScreen.K_LAST, sb.toString()).apply();   // "ชุดล่าสุด" = ชุดที่แก้แล้ว
+        final Handler h = SplitScreen.worker();
+        h.post(new Runnable() {
+            public void run() {
+                SplitScreen.animOff(app);
+                if (!SplitScreen.place(app, cn, rects[slot])) Log.w(TAG, "replace: เปิด " + cn + " ไม่สำเร็จ");
+            }
+        });
+        h.postDelayed(new Runnable() {
+            public void run() {
+                SplitScreen.enforce(app, apps.subList(slot, slot + 1), new Rect[]{rects[slot]});
+                SplitScreen.animRestore(app);
+                // ดึงทุกหน้าต่างขึ้นหน้าพื้นดำ (แอพที่เพิ่งเปิดอาจดันหน้าต่างอื่นลง) — แอพใหม่ขึ้นท้ายสุด
+                for (int i = 0; i < apps.size(); i++) {
+                    if (i == slot) continue;
+                    Integer t = taskOf(app, apps.get(i).getPackageName());
+                    if (t != null) SplitScreen.toFront(app, t);
+                }
+                Integer t = taskOf(app, cn.getPackageName());
+                if (t != null) SplitScreen.toFront(app, t);
+                Log.i(TAG, "replace slot " + slot + " -> " + cn.flattenToShortString());
+                show(app, apps, rects);
+            }
+        }, 1500);
     }
 
     private static void startTicking(final Context app) {
@@ -111,6 +192,10 @@ final class SplitBackButtons {
         sTick = new Runnable() {
             public void run() {
                 if (sBtns.isEmpty()) return;
+                // หน้าหลัก/แอพเต็มจอบังแบ่งจออยู่ → ซ่อนตัวเลือกแอพ/เส้นแบ่ง (ไม่ลอยค้างทับหน้าอื่น)
+                boolean vis = SplitBackdropActivity.isVisible();
+                SlotPicker.setVisible(vis);
+                SplitDividers.setVisible(vis);
                 // อ่านตำแหน่งหน้าต่างบนเธรดเบื้องหลัง (binder) แล้วค่อยวางปุ่มบน main
                 final List<Btn> snap = new ArrayList<Btn>(sBtns);
                 SplitScreen.worker().post(new Runnable() {
@@ -137,17 +222,27 @@ final class SplitBackButtons {
             Btn b = snap.get(i);
             if (!sBtns.contains(b)) continue;
             Rect r = rs.get(i);
-            if (!alive.get(i)) {           // ปิดหน้าต่างแล้ว → ลบปุ่มทิ้ง + เส้นแบ่ง (ช่องเปลี่ยนแล้ว)
+            if (!alive.get(i)) {           // ปิดหน้าต่างแล้ว → ลบปุ่ม + เส้นแบ่ง แล้วให้เลือกแอพมาแทนในช่องนั้น
                 if (b.shown) { try { wm.removeView(b.view); } catch (Throwable ignored) {} }
                 sBtns.remove(b);
                 SplitDividers.clear(app);
-                if (sBtns.isEmpty()) SplitBackdropActivity.dismiss();   // ปิดครบทุกหน้าต่าง → เอาพื้นดำออก
+                if (sBtns.isEmpty()) {     // ปิดครบทุกหน้าต่าง → ออกจากแบ่งจอ
+                    clearNow(app);
+                    SplitBackdropActivity.dismiss();
+                    return;
+                }
+                showPicker(app, b.slot, b.lastRect);
                 continue;
             }
             // ไม่รู้ตำแหน่ง / เต็มจอ (กดขยาย) → ซ่อน
             boolean freeform = r != null && !r.isEmpty() && (r.width() < scr.x - 8 || r.top > 8);
             boolean full = r != null && r.left <= 0 && r.width() >= scr.x - 8;
             if (!freeform || full) {
+                if (b.shown) { try { wm.removeView(b.view); } catch (Throwable ignored) {} b.shown = false; }
+                continue;
+            }
+            b.lastRect = new Rect(r);
+            if (!SplitBackdropActivity.isVisible()) {
                 if (b.shown) { try { wm.removeView(b.view); } catch (Throwable ignored) {} b.shown = false; }
                 continue;
             }
