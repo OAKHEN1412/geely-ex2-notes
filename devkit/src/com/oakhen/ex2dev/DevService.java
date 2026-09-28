@@ -33,6 +33,8 @@ public class DevService extends Service {
             try { WifiKeeper.start(app); } catch (Throwable t) { Log.e(TAG, "WifiKeeper", t); }
             // กัน Play Services crash วน (PhoneHub → CrossProfileApps ที่จอไม่มี)
             try { GmsGuard.start(app); } catch (Throwable t) { Log.e(TAG, "GmsGuard", t); }
+            // แบ่งจอปิดแอนิเมชันชั่วคราว — ถ้า process ตายก่อนคืนค่า ให้คืนตอนนี้
+            try { SplitScreen.animRestore(app); } catch (Throwable t) { Log.e(TAG, "animRestore", t); }
             // โผล่กล่องตอนบูตเฉพาะเมื่อ เปิดกล่องลอย + เปิด "เริ่มอัตโนมัติหลังบูต" (สวิตช์แยกในหน้าตั้งค่า)
             if (Prefs.get(app, Prefs.KEY_FLOATING, true) && Prefs.get(app, Prefs.KEY_AUTOSTART, true)) {
                 new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {

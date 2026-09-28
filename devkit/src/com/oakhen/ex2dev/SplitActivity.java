@@ -205,52 +205,13 @@ public class SplitActivity extends Activity {
     // ---------- เปิด ----------
     private void launch(final List<ComponentName> apps) {
         if (apps.isEmpty()) return;
-        StringBuilder s = new StringBuilder();
-        for (ComponentName c : apps) s.append(s.length() > 0 ? "|" : "").append(c.flattenToString());
-        sp.edit().putString(K_LAST, s.toString()).putInt(K_COUNT, apps.size()).apply();
-
         final Context app = getApplicationContext();
-        final Rect[] r = SplitScreen.layout(app, apps.size());
-        finish();   // ออกจากหน้านี้ก่อน ไม่ให้บังหน้าต่างที่เปิด
-        SplitBackButtons.clear(app);
-        SplitScreen.showBackdrop(app);   // พื้นดำเต็มจอข้างหลัง — ไม่เห็นวอลเปเปอร์
-        // สั่งหน้าต่าง (binder: getRunningTasks/setTaskWindowingMode/resizeTask/startActivity) บนเธรดเบื้องหลัง
-        // — เดิมทำบน main: วัดบนรถได้เฟรมช้าสุด 650ms (gfxinfo 99th) ทั้งแอพหน่วงตอนเปิดแบ่งจอ
-        final Handler h = SplitScreen.worker();
-        final Handler ui = new Handler(Looper.getMainLooper());
-        for (int i = 0; i < apps.size(); i++) {
-            final int k = i;
-            // เปิดทีละแอพห่างกันเล็กน้อย ให้ WM จัดการ task ก่อนหน้าเสร็จ
-            h.postDelayed(new Runnable() {
-                public void run() {
-                    if (!SplitScreen.place(app, apps.get(k), r[k])) {
-                        ui.post(new Runnable() { public void run() {
-                            Toast.makeText(app, "เปิด " + apps.get(k).getPackageName() + " ไม่สำเร็จ", Toast.LENGTH_SHORT).show();
-                        } });
-                    }
-                }
-            }, 350L * i + 150);
-        }
-        // ย้ำกรอบ 2 รอบ — แอพที่หลุดไปเต็มจอจะถูกดึงกลับเข้าหน้าต่างของมัน
-        for (long d : new long[]{350L * apps.size() + 1200, 350L * apps.size() + 3000}) {
-            h.postDelayed(new Runnable() {
-                public void run() { SplitScreen.enforce(app, apps, r); }
-            }, d);
-        }
-        // ปุ่ม ◀ ย้อนกลับบนแถบบนของแต่ละหน้าต่าง (หลังจัดกรอบเสร็จ)
-        h.postDelayed(new Runnable() {
-            public void run() { SplitBackButtons.show(app, apps); }
-        }, 350L * apps.size() + 3300);
+        finish();
+        overridePendingTransition(0, 0);   // ปิดหน้านี้ทันที ไม่มีแอนิเมชันค้างบังหน้าต่าง
+        SplitScreen.launchSet(app, apps);
     }
 
-    private static List<ComponentName> parse(String s) {
-        List<ComponentName> out = new ArrayList<ComponentName>();
-        for (String p : s.split("\\|")) {
-            ComponentName c = ComponentName.unflattenFromString(p);
-            if (c != null) out.add(c);
-        }
-        return out;
-    }
+    private static List<ComponentName> parse(String s) { return SplitScreen.parse(s); }
 
     // ---------- UI helpers ----------
     private View appCell(android.graphics.drawable.Drawable icon, String label) {

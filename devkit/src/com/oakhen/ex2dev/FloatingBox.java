@@ -191,6 +191,17 @@ public class FloatingBox {
             }
         });
         panel.addView(split);
+        final String last = Prefs.of(ctx).getString(SplitScreen.K_LAST, "");
+        if (last.length() > 0) {
+            Button again = mkBtn(ctx, "▶ แบ่งจอล่าสุด");
+            again.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    collapse(wm);
+                    SplitScreen.launchSet(ctx, SplitScreen.parse(last));
+                }
+            });
+            panel.addView(again);
+        }
         if (!showOff && !showDim) {
             TextView hint = new TextView(ctx);
             hint.setText("เปิดปุ่มได้ในหน้าตั้งค่า");

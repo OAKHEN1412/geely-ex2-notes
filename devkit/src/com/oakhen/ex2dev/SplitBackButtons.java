@@ -47,7 +47,7 @@ final class SplitBackButtons {
     }
 
     /** เรียกจากเธรดไหนก็ได้ — สร้างปุ่มให้แอพที่อยู่ในแบ่งจอ (ลบของเก่าก่อน) */
-    static void show(final Context ctx, final List<ComponentName> apps) {
+    static void show(final Context ctx, final List<ComponentName> apps, final Rect[] rects) {
         final Context app = ctx.getApplicationContext();
         final List<int[]> tasks = new ArrayList<int[]>();   // {index, taskId}
         for (int i = 0; i < apps.size(); i++) {
@@ -57,6 +57,12 @@ final class SplitBackButtons {
         main().post(new Runnable() {
             public void run() {
                 clearNow(app);
+                // เส้นแบ่ง (ลาก=ปรับขนาด, แตะ ⇄=สลับ) — เฉพาะเมื่อเจอ task ครบทุกช่อง
+                if (rects != null && tasks.size() == apps.size() && apps.size() >= 2) {
+                    int[] ids = new int[tasks.size()];
+                    for (int k = 0; k < ids.length; k++) ids[k] = tasks.get(k)[1];
+                    SplitDividers.show(app, ids, rects);
+                }
                 WindowManager wm = (WindowManager) app.getSystemService(Context.WINDOW_SERVICE);
                 for (int[] it : tasks) {
                     final String pkg = apps.get(it[0]).getPackageName();
@@ -131,9 +137,11 @@ final class SplitBackButtons {
             Btn b = snap.get(i);
             if (!sBtns.contains(b)) continue;
             Rect r = rs.get(i);
-            if (!alive.get(i)) {           // ปิดหน้าต่างแล้ว → ลบปุ่มทิ้ง
+            if (!alive.get(i)) {           // ปิดหน้าต่างแล้ว → ลบปุ่มทิ้ง + เส้นแบ่ง (ช่องเปลี่ยนแล้ว)
                 if (b.shown) { try { wm.removeView(b.view); } catch (Throwable ignored) {} }
                 sBtns.remove(b);
+                SplitDividers.clear(app);
+                if (sBtns.isEmpty()) SplitBackdropActivity.dismiss();   // ปิดครบทุกหน้าต่าง → เอาพื้นดำออก
                 continue;
             }
             // ไม่รู้ตำแหน่ง / เต็มจอ (กดขยาย) → ซ่อน

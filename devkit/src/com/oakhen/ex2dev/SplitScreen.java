@@ -160,6 +160,8 @@ final class SplitScreen {
     static void exitAll(Context c) {
         SplitBackdropActivity.dismiss();
         SplitBackButtons.clear(c);
+        SplitDividers.clear(c);
+        animRestore(c);
         try {
             ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
             for (ActivityManager.RunningTaskInfo t : am.getRunningTasks(30)) {
@@ -196,16 +198,113 @@ final class SplitScreen {
         }
     }
 
-    private static boolean moveTask(int taskId, Rect bounds) {
-        if (!setMode(taskId, WINDOWING_MODE_FREEFORM)) return false;
+    /** กรอบปัจจุบันของ task — ว่าง/null = เต็มจอ (ใน Android 9 task เต็มจอมี bounds ว่าง) */
+    static Rect taskBounds(int taskId) {
+        try {
+            Object s = iam();
+            return (Rect) s.getClass().getMethod("getTaskBounds", int.class).invoke(s, taskId);
+        } catch (Throwable t) { return null; }
+    }
+
+    /** ปรับกรอบ task ที่เป็นหน้าต่างอยู่แล้ว (คำสั่งเดียว ไม่กระโดด) */
+    static boolean resize(int taskId, Rect bounds) {
         try {
             Object s = iam();
             s.getClass().getMethod("resizeTask", int.class, Rect.class, int.class).invoke(s, taskId, bounds, 0);
             return true;
         } catch (Throwable t) {
-            Log.w(TAG, "resizeTask " + taskId, t);
+            // เคสปกติของ task เต็มจอ ("resizeTask not allowed") — log สั้น ๆ ไม่ต้อง stack
+            Log.i(TAG, "resizeTask " + taskId + ": " + (t.getCause() != null ? t.getCause().getMessage() : t));
             return false;
         }
+    }
+
+    /**
+     * ย้าย task เข้ากรอบ — ทำเท่าที่จำเป็น (วัดจากวิดีโอเครื่องจำลอง: การสั่งซ้ำ/เปลี่ยนโหมด = หน้าต่างกระโดด)
+     *  - อยู่ถูกที่แล้ว → ไม่ทำอะไร
+     *  - เป็นหน้าต่างอยู่แล้ว → resizeTask อย่างเดียว
+     *  - เต็มจอ → ต้อง setTaskWindowingMode ก่อน (resizeTask บน task เต็มจอ = "resizeTask not allowed" ใน Android 9)
+     *    จังหวะกลางหน้าต่างจะอยู่ขนาดเริ่มต้นกลางจอ → ปิดแอนิเมชันระบบช่วงนั้น (animOff) ให้แวบสั้นที่สุด
+     */
+    private static boolean moveTask(int taskId, Rect bounds) {
+        Rect cur = taskBounds(taskId);
+        if (cur != null && cur.equals(bounds)) return true;
+        // task เต็มจอบางตัวรายงาน bounds = เต็มจอ (ไม่ใช่ว่าง) → resize จะโดน "not allowed"
+        // ลอง resize ก่อน (ถ้าเป็นหน้าต่างอยู่แล้ว = คำสั่งเดียว) ไม่ผ่านค่อยเปลี่ยนโหมด — ไม่ต้อง force-stop แอพ
+        if (cur != null && !cur.isEmpty() && resize(taskId, bounds)) return true;
+        if (!setMode(taskId, WINDOWING_MODE_FREEFORM)) return false;
+        return resize(taskId, bounds);
+    }
+
+    // ---------- ปิดแอนิเมชันชั่วคราวระหว่างจัดหน้าต่าง ----------
+    static final String[] ANIM = {"window_animation_scale", "transition_animation_scale", "animator_duration_scale"};
+    private static String[] sAnimSaved;
+
+    static synchronized void animOff(Context c) {
+        if (sAnimSaved != null) return;
+        sAnimSaved = new String[ANIM.length];
+        android.content.SharedPreferences.Editor ed = Prefs.of(c).edit();
+        for (int i = 0; i < ANIM.length; i++) {
+            String v = Settings.Global.getString(c.getContentResolver(), ANIM[i]);
+            sAnimSaved[i] = v;
+            ed.putString("anim_saved_" + i, v == null ? "" : v);   // เผื่อ process ตายกลางทาง → DevService คืนค่า
+            Settings.Global.putString(c.getContentResolver(), ANIM[i], "0");
+        }
+        ed.putBoolean("anim_off", true).apply();
+    }
+
+    static synchronized void animRestore(Context c) {
+        android.content.SharedPreferences sp = Prefs.of(c);
+        if (sAnimSaved == null && !sp.getBoolean("anim_off", false)) return;
+        for (int i = 0; i < ANIM.length; i++) {
+            String v = sAnimSaved != null ? sAnimSaved[i] : sp.getString("anim_saved_" + i, "");
+            Settings.Global.putString(c.getContentResolver(), ANIM[i], (v == null || v.isEmpty()) ? "1" : v);
+        }
+        sAnimSaved = null;
+        sp.edit().putBoolean("anim_off", false).apply();
+    }
+
+    // ---------- เปิดชุดแบ่งจอ (ใช้ทั้งหน้าแบ่งจอ และปุ่มในกล่องลอย) ----------
+    static final String K_LAST = "split_last";
+
+    static List<ComponentName> parse(String s) {
+        List<ComponentName> out = new ArrayList<ComponentName>();
+        if (s == null) return out;
+        for (String p : s.split("\\|")) {
+            ComponentName c = ComponentName.unflattenFromString(p);
+            if (c != null) out.add(c);
+        }
+        return out;
+    }
+
+    static void launchSet(Context ctx, final List<ComponentName> apps) {
+        if (apps == null || apps.isEmpty()) return;
+        final Context app = ctx.getApplicationContext();
+        StringBuilder sb = new StringBuilder();
+        for (ComponentName c : apps) sb.append(sb.length() > 0 ? "|" : "").append(c.flattenToString());
+        Prefs.of(app).edit().putString(K_LAST, sb.toString()).putInt("split_count", apps.size()).apply();
+
+        final Rect[] r = layout(app, apps.size());
+        SplitBackButtons.clear(app);
+        SplitDividers.clear(app);
+        showBackdrop(app);   // พื้นดำเต็มจอข้างหลัง — ไม่เห็นวอลเปเปอร์
+        final Handler h = worker();
+        h.post(new Runnable() { public void run() { animOff(app); } });
+        for (int i = 0; i < apps.size(); i++) {
+            final int k = i;
+            // ทีละแอพห่างกันเล็กน้อย ให้ WM จัดการ task ก่อนหน้าเสร็จ
+            h.postDelayed(new Runnable() {
+                public void run() {
+                    if (!place(app, apps.get(k), r[k])) Log.w(TAG, "เปิด " + apps.get(k) + " ไม่สำเร็จ");
+                }
+            }, 300L * i + 100);
+        }
+        // ย้ำกรอบ (ทำเฉพาะแอพที่หลุด — moveTask ข้ามถ้าอยู่ถูกที่แล้ว)
+        long t = 300L * apps.size() + 900;
+        h.postDelayed(new Runnable() { public void run() { enforce(app, apps, r); } }, t);
+        h.postDelayed(new Runnable() { public void run() { enforce(app, apps, r); animRestore(app); } }, t + 1500);
+        // ปุ่ม ◀ + เส้นแบ่ง
+        h.postDelayed(new Runnable() { public void run() { SplitBackButtons.show(app, apps, r); } }, t + 1700);
     }
 
     private static void forceStop(Context c, String pkg) {
