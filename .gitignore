@@ -24,3 +24,5 @@ _apps/
 _CentralEXAuto/
 # ไฟล์ Google (OpenGApps core) — โหลดใหม่ได้ ไม่เก็บใน repo
 _install-bundle/gapps/system/
+devkit/stub/build/
+devkit/stub/out/

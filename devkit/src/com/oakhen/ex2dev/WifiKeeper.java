@@ -38,6 +38,7 @@ final class WifiKeeper {
         f.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
         f.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
         f.addAction(Intent.ACTION_SCREEN_ON);   // สตาร์ทรถแบบ "ตื่นจาก sleep" (ไม่ใช่รีบูต) ไม่มี BOOT_COMPLETED
+        f.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);   // ผลสแกนออก → เจอวงที่เคยต่อ = สั่งต่อทันที
         sApp.registerReceiver(new BroadcastReceiver() {
             @Override
             public void onReceive(Context c, Intent i) {
@@ -45,6 +46,9 @@ final class WifiKeeper {
                     for (long d : new long[]{1000, 6000}) {
                         sH.postDelayed(new Runnable() { public void run() { ensureOn(); } }, d);
                     }
+                    sH.postDelayed(new Runnable() { public void run() { try { scanIfDisconnected(); } catch (Throwable ignored) {} } }, 3000);
+                } else if (WifiManager.SCAN_RESULTS_AVAILABLE_ACTION.equals(i.getAction())) {
+                    try { connectKnown(); } catch (Throwable t) { Log.w(TAG, "connectKnown", t); }
                 } else if (WifiManager.WIFI_STATE_CHANGED_ACTION.equals(i.getAction())) {
                     int st = i.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN);
                     if (st == WifiManager.WIFI_STATE_DISABLED && enabledPref()) {
@@ -111,6 +115,49 @@ final class WifiKeeper {
         } catch (Throwable t) {
             Log.w(TAG, "setWifiEnabled failed", t);
         }
+    }
+
+    private static boolean isConnected(WifiManager w) {
+        android.net.wifi.WifiInfo info = w.getConnectionInfo();
+        return info != null && info.getNetworkId() != -1
+                && info.getSupplicantState() == android.net.wifi.SupplicantState.COMPLETED;
+    }
+
+    private static long sLastConnectTry;
+
+    /**
+     * ยังไม่ต่อ + ผลสแกนมีวงที่บันทึกไว้ → สั่งต่อวงที่สัญญาณแรงสุดเลย (ไม่รอรอบ auto-join ของระบบ)
+     * WifiManager.connect(int, ActionListener) = @SystemApi (uid system) · สำรอง enableNetwork+reconnect
+     * เว้นอย่างน้อย 15 วิระหว่างครั้ง กันสั่งซ้ำระหว่างที่ระบบกำลังต่ออยู่
+     */
+    private static void connectKnown() {
+        if (!enabledPref()) return;
+        WifiManager w = wm();
+        if (w == null || !w.isWifiEnabled() || blocked(w) || isConnected(w)) return;
+        long now = System.currentTimeMillis();
+        if (now - sLastConnectTry < 15000) return;
+        java.util.List<android.net.wifi.WifiConfiguration> saved = w.getConfiguredNetworks();
+        java.util.List<android.net.wifi.ScanResult> seen = w.getScanResults();
+        if (saved == null || seen == null) return;
+        android.net.wifi.WifiConfiguration best = null; int bestLevel = Integer.MIN_VALUE;
+        for (android.net.wifi.WifiConfiguration c : saved) {
+            if (c.SSID == null) continue;
+            String ssid = c.SSID.replaceAll("^\"|\"$", "");
+            for (android.net.wifi.ScanResult r : seen) {
+                if (ssid.equals(r.SSID) && r.level > bestLevel) { best = c; bestLevel = r.level; }
+            }
+        }
+        if (best == null) return;
+        sLastConnectTry = now;
+        boolean ok = false;
+        try {
+            Class<?> al = Class.forName("android.net.wifi.WifiManager$ActionListener");
+            WifiManager.class.getMethod("connect", int.class, al).invoke(w, best.networkId, null);
+            ok = true;
+        } catch (Throwable t) {
+            ok = w.enableNetwork(best.networkId, false) && w.reconnect();
+        }
+        Log.i(TAG, "เจอ Wi-Fi ที่เคยต่อ " + best.SSID + " (" + bestLevel + " dBm) -> สั่งต่อ: " + ok);
     }
 
     private static void scanIfDisconnected() {

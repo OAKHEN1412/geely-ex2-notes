@@ -114,6 +114,7 @@ final class SplitDividers {
                     return true;
                 case MotionEvent.ACTION_UP:
                     if (dragging) pushPair(i); else swap(i);
+                    raiseAll(app);   // ให้ทุกหน้าต่างอยู่หน้าพื้นดำเสมอหลังปรับ
                     return true;
                 case MotionEvent.ACTION_CANCEL:
                     if (dragging) pushPair(i);
@@ -156,6 +157,14 @@ final class SplitDividers {
         final Rect ra = new Rect(sRects[i]), rb = new Rect(sRects[i + 1]);
         SplitScreen.worker().post(new Runnable() {
             public void run() { SplitScreen.resize(ta, ra); SplitScreen.resize(tb, rb); }
+        });
+    }
+
+    private static void raiseAll(final Context app) {
+        if (sTasks == null) return;
+        final int[] ts = sTasks.clone();
+        SplitScreen.worker().post(new Runnable() {
+            public void run() { for (int t : ts) SplitScreen.toFront(app, t); }
         });
     }
 

@@ -106,6 +106,7 @@ final class SplitScreen {
     static boolean place(Context c, ComponentName cn, Rect bounds) {
         Integer task = runningTaskOf(c, cn.getPackageName());
         if (task != null && moveTask(task, bounds)) {
+            toFront(c, task);
             Log.i(TAG, cn.getPackageName() + " task " + task + " -> " + bounds.toShortString());
             return true;
         }
@@ -139,6 +140,7 @@ final class SplitScreen {
             Integer task = runningTaskOf(c, apps.get(k).getPackageName());
             if (task == null) { Log.w(TAG, "enforce: ไม่เจอ task " + apps.get(k).getPackageName()); continue; }
             boolean ok = moveTask(task, r[k]);
+            toFront(c, task);
             Log.i(TAG, "enforce " + apps.get(k).getPackageName() + " task " + task + " -> " + r[k].toShortString() + " " + ok);
         }
     }
@@ -196,6 +198,14 @@ final class SplitScreen {
             Log.w(TAG, "setTaskWindowingMode " + taskId, t);
             return false;
         }
+    }
+
+    /** ดึง task ขึ้นหน้าสุด — Android 9 stack หน้าต่างอิสระไม่ได้อยู่บน stack เต็มจอเสมอ (พื้นดำที่เปิดทีหลังบังได้) */
+    static void toFront(Context c, int taskId) {
+        try {
+            ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+            am.moveTaskToFront(taskId, 0);
+        } catch (Throwable t) { Log.w(TAG, "moveTaskToFront " + taskId, t); }
     }
 
     /** กรอบปัจจุบันของ task — ว่าง/null = เต็มจอ (ใน Android 9 task เต็มจอมี bounds ว่าง) */
