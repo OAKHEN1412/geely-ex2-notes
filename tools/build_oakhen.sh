@@ -83,6 +83,12 @@ inj='''        <service android:name="com.oakhen.ex2dev.DevService" android:expo
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity android:name="com.oakhen.ex2dev.SplitActivity" android:exported="true" android:label="แบ่งจอ" android:theme="@android:style/Theme.Material" android:excludeFromRecents="true" android:taskAffinity="com.oakhen.ex2dev.split" android:launchMode="singleTask" android:resizeableActivity="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
     </application>'''
 if 'android.permission.DEVICE_POWER' not in s:
     s=s.replace('<uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>',

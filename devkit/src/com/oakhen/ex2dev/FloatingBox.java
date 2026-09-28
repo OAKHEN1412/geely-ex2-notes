@@ -180,6 +180,17 @@ public class FloatingBox {
             });
             panel.addView(dim);
         }
+        Button split = mkBtn(ctx, "🪟 แบ่งจอ");
+        split.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                collapse(wm);
+                try {
+                    ctx.startActivity(new android.content.Intent(ctx, SplitActivity.class)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Throwable t) { android.util.Log.w("EX2Dev", "open split", t); }
+            }
+        });
+        panel.addView(split);
         if (!showOff && !showDim) {
             TextView hint = new TextView(ctx);
             hint.setText("เปิดปุ่มได้ในหน้าตั้งค่า");
