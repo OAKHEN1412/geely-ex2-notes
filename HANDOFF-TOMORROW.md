@@ -2,6 +2,15 @@
 
 _เขียน 2026-08-21 ปลายเซสชัน · ผู้ใช้ GitHub OAKHEN1412 · ภาษาไทย_
 
+## อัปเดต 2026-09-28 — แบ่งจอ + รถคันเดิม (MAC e8:8f:c4:08:dd:72) ลงใหม่หลังรีเซ็ตโรงงาน
+- รีเซ็ตโรงงาน = ล้าง /data → persist.adb.tcp.port หาย → ต้องรันแพตช์ USB ใหม่ (ไฟล์ใน /system ยังอยู่: EX2 app + ex2_backlight.rc)
+- **แบ่งจอ 2–3 แอพ** (SplitActivity/SplitScreen): freeform settings + รีบูต 1 ครั้ง · แอพที่ 2 ชอบหลุดไป stack fullscreen → enforce (setTaskWindowingMode+resizeTask) ×2 · สั่งบน worker thread (เดิม main = เฟรม 650ms) · พื้นดำ SplitBackdropActivity · ปุ่ม ◀ ต่อหน้าต่าง SplitBackButtons (setFocusedTask + inject BACK) ทดสอบบนเครื่องจำลองผ่าน
+- **GmsGuard**: GMS 26.34 เปิด PhoneHubService กลับเอง → crash วน · แอพเฝ้าปิดตอนบูต/PACKAGE_CHANGED/ทุก 5 นาที → 0 crash
+- Google Maps crash: ยืนยัน `service check batteryproperties` = not found + ไม่มี healthd · ใช้ Waze (CentralEXAuto, hash ตรง) แทน
+- Play Store: บล็อกบน automotive (แก้ไม่ได้) · GSF ID รถคันนี้ 3872882806066567878 (ลงทะเบียนแล้ว) · ห้าม pm clear com.google.android.gsf (ID เปลี่ยน)
+- ความหน่วง: CPU ว่าง ~92%, RAM ว่าง 2.7/6 GB · mobile_log_d (MTK logger) เขียน /log/mtklog ตลอด ~3.7% core — ยังไม่ปิด (รอ user)
+- เครื่องจำลอง: `Desktop\EX2 Emulator.bat` (AVD EX2_A9, SDK %LOCALAPPDATA%\Android\Sdk, adb ใน platform-tools) freeform เปิดแล้ว, EX2 app ลงเป็น system app
+
 ## อัปเดต 2026-09-27 (ดึก) — รถคันใหม่ ลงจริงแล้ว (SW0E22H0306H111400000 / XDSN IHU629G0MAT43…)
 - **ปลดล็อก USB**: ได้ผลเมื่อใช้ **zip ต้นฉบับแตกทั้งก้อนไม่แก้อะไร** (ตรง Drive ทุกไบต์) บน USB ที่ fat32format เต็มแท่ง — ก่อนหน้านั้นทุกแบบ (ย้าย/เพิ่มโฟลเดอร์ sbdUpgrade, วางราก) ขึ้น "ensure udisk plugged … \sbdUpgrade\OS" ทั้งหมด · สาเหตุจริงยังไม่รู้แน่ (USB เดิมเป็นพาร์ทิชัน 32GB บนแท่ง 64GB อดีต ESD-USB)
 - ลงแล้ว: EX2 BY OAKHEN (system, userId=1000) + ex2_backlight.rc (trigger ใช้ได้: sys.ex2bl=54 → node 54) · SmartTube · GApps core · **Play Services 26.34.67 (100400) ลงทับเป็น update** · YouTube **20.51.39** (ตัวสุดท้ายที่ minSdk 28; 21.x = minSdk 29) · YouTube Music 9.38.51 · Disney+ 26.12 (split: base+arm64+en+th+mdpi) · Cromite 120 (claude.ai, grant mic)
