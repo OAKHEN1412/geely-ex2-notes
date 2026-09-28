@@ -9,6 +9,8 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.WindowManager;
@@ -35,6 +37,17 @@ final class SplitScreen {
     static final String[] KEYS = {"development_settings_enabled", "enable_freeform_support", "force_resizable_activities"};
 
     private SplitScreen() {}
+
+    private static Handler sWorker;
+    /** เธรดเบื้องหลังเดียวสำหรับสั่งหน้าต่าง (ทำตามลำดับ ไม่บล็อกหน้าจอ) */
+    static synchronized Handler worker() {
+        if (sWorker == null) {
+            HandlerThread t = new HandlerThread("ex2-split");
+            t.start();
+            sWorker = new Handler(t.getLooper());
+        }
+        return sWorker;
+    }
 
     static boolean freeformReady(Context c) {
         for (String k : KEYS) {

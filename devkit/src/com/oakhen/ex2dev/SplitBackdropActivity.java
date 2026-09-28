@@ -47,7 +47,9 @@ public class SplitBackdropActivity extends Activity {
 
     /** ปิดพื้นหลัง (ตอนคืนเต็มจอ) */
     static void dismiss() {
-        SplitBackdropActivity a = sCurrent != null ? sCurrent.get() : null;
-        if (a != null && !a.isFinishing()) a.finish();
+        final SplitBackdropActivity a = sCurrent != null ? sCurrent.get() : null;
+        if (a != null && !a.isFinishing()) {   // อาจถูกเรียกจากเธรดเบื้องหลัง (exitAll) → ปิดบน UI thread
+            a.runOnUiThread(new Runnable() { public void run() { if (!a.isFinishing()) a.finish(); } });
+        }
     }
 }

@@ -81,7 +81,11 @@ public class SplitActivity extends Activity {
             chip(bar, "▶ ชุดล่าสุด", new View.OnClickListener() { public void onClick(View v) { launch(parse(last)); } });
         }
         chip(bar, "⤢ คืนเต็มจอ", new View.OnClickListener() {
-            public void onClick(View v) { SplitScreen.exitAll(SplitActivity.this); toast("คืนเต็มจอแล้ว"); }
+            public void onClick(View v) {
+                final Context app = getApplicationContext();
+                SplitScreen.worker().post(new Runnable() { public void run() { SplitScreen.exitAll(app); } });
+                toast("คืนเต็มจอแล้ว");
+            }
         });
 
         hint = new TextView(this);
@@ -209,14 +213,19 @@ public class SplitActivity extends Activity {
         final Rect[] r = SplitScreen.layout(app, apps.size());
         finish();   // ออกจากหน้านี้ก่อน ไม่ให้บังหน้าต่างที่เปิด
         SplitScreen.showBackdrop(app);   // พื้นดำเต็มจอข้างหลัง — ไม่เห็นวอลเปเปอร์
-        final Handler h = new Handler(Looper.getMainLooper());
+        // สั่งหน้าต่าง (binder: getRunningTasks/setTaskWindowingMode/resizeTask/startActivity) บนเธรดเบื้องหลัง
+        // — เดิมทำบน main: วัดบนรถได้เฟรมช้าสุด 650ms (gfxinfo 99th) ทั้งแอพหน่วงตอนเปิดแบ่งจอ
+        final Handler h = SplitScreen.worker();
+        final Handler ui = new Handler(Looper.getMainLooper());
         for (int i = 0; i < apps.size(); i++) {
             final int k = i;
             // เปิดทีละแอพห่างกันเล็กน้อย ให้ WM จัดการ task ก่อนหน้าเสร็จ
             h.postDelayed(new Runnable() {
                 public void run() {
                     if (!SplitScreen.place(app, apps.get(k), r[k])) {
-                        Toast.makeText(app, "เปิด " + apps.get(k).getPackageName() + " ไม่สำเร็จ", Toast.LENGTH_SHORT).show();
+                        ui.post(new Runnable() { public void run() {
+                            Toast.makeText(app, "เปิด " + apps.get(k).getPackageName() + " ไม่สำเร็จ", Toast.LENGTH_SHORT).show();
+                        } });
                     }
                 }
             }, 350L * i + 150);
