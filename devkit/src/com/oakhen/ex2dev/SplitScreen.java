@@ -112,6 +112,58 @@ final class SplitScreen {
         return r;
     }
 
+    // ---------- CarPlay: ภาพจาก iPhone ตายตัว 1920×968 (log [DADAO_CP] mViewArea) — ย่อแล้วต้องคงสัดส่วน ไม่งั้นถูกบีบ ----------
+    static final String CARPLAY_PKG = "com.njda.carplay";
+    static final int CP_W = 1920, CP_H = 968, CP_WIN_W = 1280;
+
+    static boolean isCarPlay(ComponentName c) { return c != null && CARPLAY_PKG.equals(c.getPackageName()); }
+
+    /** ชุดที่มี CarPlay → เรียงเป็น [ซ้ายเต็มสูง, CarPlay ขวาบน, ขวาล่าง] (null = ช่องว่าง ให้เลือกแอพ) · ไม่มี CarPlay = คืนเดิม */
+    static List<ComponentName> arrange(List<ComponentName> apps) {
+        ComponentName cp = null;
+        List<ComponentName> others = new ArrayList<ComponentName>();
+        for (ComponentName c : apps) {
+            if (c == null) continue;
+            if (isCarPlay(c)) cp = c; else others.add(c);
+        }
+        if (cp == null) return others;
+        List<ComponentName> out = new ArrayList<ComponentName>();
+        out.add(others.size() > 0 ? others.get(0) : null);
+        out.add(cp);
+        out.add(others.size() > 1 ? others.get(1) : null);
+        return out;
+    }
+
+    /** ชุดที่ arrange แล้ว → กรอบแต่ละช่อง */
+    static Rect[] layoutFor(Context c, List<ComponentName> apps) {
+        if (apps.size() != 3 || !isCarPlay(apps.get(1))) return layout(c, apps.size());
+        Rect full = layout(c, 1)[0];
+        int gap = 4;
+        int cpW = Math.min(CP_WIN_W, full.width() - 400);
+        int cpH = cpW * CP_H / CP_W;
+        int x = full.right - cpW;
+        return new Rect[]{
+                new Rect(full.left, full.top, x - gap, full.bottom),
+                new Rect(x, full.top, full.right, full.top + cpH),
+                new Rect(x, full.top + cpH + gap, full.right, full.bottom)};
+    }
+
+    /** กรอบเรียงเป็นแถวเดียวซ้าย→ขวา (เส้นแบ่งลากได้เฉพาะแบบนี้) */
+    static boolean isRow(Rect[] r) {
+        for (int i = 1; i < r.length; i++) if (r[i].top != r[0].top || r[i].bottom != r[0].bottom || r[i].left < r[i - 1].right) return false;
+        return true;
+    }
+
+    static String flatten(List<ComponentName> apps) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < apps.size(); i++) {
+            ComponentName c = apps.get(i);
+            if (i > 0) sb.append('|');
+            sb.append(c == null ? "_" : c.flattenToString());
+        }
+        return sb.toString();
+    }
+
     /** เปิด (หรือย้าย) แอพให้อยู่ในกรอบ bounds แบบหน้าต่างอิสระ */
     static boolean place(Context c, ComponentName cn, Rect bounds) {
         Integer task = runningTaskOf(c, cn.getPackageName());
@@ -147,6 +199,7 @@ final class SplitScreen {
      */
     static void enforce(Context c, List<ComponentName> apps, Rect[] r) {
         for (int k = 0; k < apps.size() && k < r.length; k++) {
+            if (apps.get(k) == null) continue;
             Integer task = runningTaskOf(c, apps.get(k).getPackageName());
             if (task == null) { Log.w(TAG, "enforce: ไม่เจอ task " + apps.get(k).getPackageName()); continue; }
             boolean ok = moveTask(task, r[k]);
@@ -291,20 +344,22 @@ final class SplitScreen {
         List<ComponentName> out = new ArrayList<ComponentName>();
         if (s == null) return out;
         for (String p : s.split("\\|")) {
+            if ("_".equals(p)) { out.add(null); continue; }   // ช่องว่าง (ชุด CarPlay)
             ComponentName c = ComponentName.unflattenFromString(p);
             if (c != null) out.add(c);
         }
         return out;
     }
 
-    static void launchSet(Context ctx, final List<ComponentName> apps) {
-        if (apps == null || apps.isEmpty()) return;
+    static void launchSet(Context ctx, List<ComponentName> picked) {
+        if (picked == null || picked.isEmpty()) return;
+        final List<ComponentName> apps = arrange(picked);
         final Context app = ctx.getApplicationContext();
-        StringBuilder sb = new StringBuilder();
-        for (ComponentName c : apps) sb.append(sb.length() > 0 ? "|" : "").append(c.flattenToString());
-        Prefs.of(app).edit().putString(K_LAST, sb.toString()).putInt("split_count", apps.size()).apply();
+        int n = 0;
+        for (ComponentName c : apps) if (c != null) n++;
+        Prefs.of(app).edit().putString(K_LAST, flatten(apps)).putInt("split_count", Math.max(2, Math.min(3, n))).apply();
 
-        final Rect[] r = layout(app, apps.size());
+        final Rect[] r = layoutFor(app, apps);
         SplitBackButtons.clear(app);
         SplitDividers.clear(app);
         showBackdrop(app);   // พื้นดำเต็มจอข้างหลัง — ไม่เห็นวอลเปเปอร์
@@ -315,6 +370,7 @@ final class SplitScreen {
             // ทีละแอพห่างกันเล็กน้อย ให้ WM จัดการ task ก่อนหน้าเสร็จ
             h.postDelayed(new Runnable() {
                 public void run() {
+                    if (apps.get(k) == null) return;   // ช่องว่าง → ตัวเลือกแอพ (SplitBackButtons)
                     if (!place(app, apps.get(k), r[k])) Log.w(TAG, "เปิด " + apps.get(k) + " ไม่สำเร็จ");
                 }
             }, 300L * i + 100);

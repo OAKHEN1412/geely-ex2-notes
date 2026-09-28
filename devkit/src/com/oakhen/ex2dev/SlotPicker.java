@@ -42,6 +42,7 @@ final class SlotPicker {
     private static final int BG = 0xFF1B1C1E, CARD = 0xFF2A2B2E, CLAY = 0xFFD97757, CREAM = 0xFFF2EFE9, MUTED = 0xFF9AA0A6;
     private static volatile List<Entry> sCache;
     private static boolean sLoading;
+    private static final List<Runnable> sWaiting = new ArrayList<Runnable>();
     private static final SparseArray<View> sViews = new SparseArray<View>();
     private static Handler sMain;
 
@@ -55,6 +56,7 @@ final class SlotPicker {
     /** โหลดรายชื่อแอพล่วงหน้า (เรียกตอนเริ่มแบ่งจอ) — ไม่ใช้เธรด split เพื่อไม่ถ่วงการจัดหน้าต่าง */
     static synchronized void preload(final Context app, final Runnable done) {
         if (sCache != null) { if (done != null) main().post(done); return; }
+        if (done != null) sWaiting.add(done);   // โหลดค้างอยู่ก็รอผลรอบเดียวกัน
         if (sLoading) return;
         sLoading = true;
         new Thread(new Runnable() {
@@ -67,8 +69,12 @@ final class SlotPicker {
                                 r.loadIcon(pm), String.valueOf(r.loadLabel(pm))));
                     }
                 } catch (Throwable ignored) {}
-                synchronized (SlotPicker.class) { sCache = out; sLoading = false; }
-                if (done != null) main().post(done);
+                List<Runnable> w;
+                synchronized (SlotPicker.class) {
+                    sCache = out; sLoading = false;
+                    w = new ArrayList<Runnable>(sWaiting); sWaiting.clear();
+                }
+                for (Runnable r : w) main().post(r);
             }
         }, "ex2-slot-load").start();
     }

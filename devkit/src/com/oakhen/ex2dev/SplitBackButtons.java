@@ -64,6 +64,7 @@ final class SplitBackButtons {
         final Context app = ctx.getApplicationContext();
         final List<int[]> tasks = new ArrayList<int[]>();   // {index, taskId}
         for (int i = 0; i < apps.size(); i++) {
+            if (apps.get(i) == null) continue;   // ช่องว่าง
             Integer t = taskOf(app, apps.get(i).getPackageName());
             if (t != null) tasks.add(new int[]{i, t});
         }
@@ -74,7 +75,7 @@ final class SplitBackButtons {
                 sSlotRects = rects;
                 SlotPicker.preload(app, null);
                 // เส้นแบ่ง (ลาก=ปรับขนาด, แตะ ⇄=สลับ) — เฉพาะเมื่อเจอ task ครบทุกช่อง
-                if (rects != null && tasks.size() == apps.size() && apps.size() >= 2) {
+                if (rects != null && tasks.size() == apps.size() && apps.size() >= 2 && SplitScreen.isRow(rects)) {
                     int[] ids = new int[tasks.size()];
                     for (int k = 0; k < ids.length; k++) ids[k] = tasks.get(k)[1];
                     SplitDividers.show(app, ids, rects);
@@ -156,12 +157,23 @@ final class SplitBackButtons {
         }
         for (Btn b : sBtns) if (b.lastRect != null && b.slot < rects.length) rects[b.slot] = new Rect(b.lastRect);
         if (rects[slot] == null) return;
+        ComponentName old = sApps.get(slot);
         sPickerRects.remove(slot);
         sApps.set(slot, cn);
         final List<ComponentName> apps = new ArrayList<ComponentName>(sApps);
-        StringBuilder sb = new StringBuilder();
-        for (ComponentName c : apps) sb.append(sb.length() > 0 ? "|" : "").append(c.flattenToString());
-        Prefs.of(app).edit().putString(SplitScreen.K_LAST, sb.toString()).apply();   // "ชุดล่าสุด" = ชุดที่แก้แล้ว
+        // CarPlay เข้า/ออกชุด → กรอบทั้งชุดเปลี่ยน (CarPlay ต้องคงสัดส่วน) → จัดใหม่ทั้งชุด
+        if (SplitScreen.isCarPlay(cn) || SplitScreen.isCarPlay(old)) {
+            List<ComponentName> keep = new ArrayList<ComponentName>();
+            for (int i = 0; i < apps.size(); i++) {
+                ComponentName c = apps.get(i);
+                if (c == null) continue;
+                if (i == slot || taskOf(app, c.getPackageName()) != null) keep.add(c);
+            }
+            clearNow(app);
+            SplitScreen.launchSet(app, keep);
+            return;
+        }
+        Prefs.of(app).edit().putString(SplitScreen.K_LAST, SplitScreen.flatten(apps)).apply();   // "ชุดล่าสุด" = ชุดที่แก้แล้ว
         final Handler h = SplitScreen.worker();
         h.post(new Runnable() {
             public void run() {
@@ -175,7 +187,7 @@ final class SplitBackButtons {
                 SplitScreen.animRestore(app);
                 // ดึงทุกหน้าต่างขึ้นหน้าพื้นดำ (แอพที่เพิ่งเปิดอาจดันหน้าต่างอื่นลง) — แอพใหม่ขึ้นท้ายสุด
                 for (int i = 0; i < apps.size(); i++) {
-                    if (i == slot) continue;
+                    if (i == slot || apps.get(i) == null) continue;
                     Integer t = taskOf(app, apps.get(i).getPackageName());
                     if (t != null) SplitScreen.toFront(app, t);
                 }
