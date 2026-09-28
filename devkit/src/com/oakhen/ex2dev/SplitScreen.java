@@ -68,7 +68,9 @@ final class SplitScreen {
         return changed;
     }
 
-    /** แอพที่มีไอคอนบนหน้าหลัก (ยกเว้นตัวเอง) เรียงตามชื่อ */
+    static final String[] EXTRA = {"com.njda.carplay/.platform.adapter.CarplayActivity"};
+
+    /** แอพที่มีไอคอนบนหน้าหลัก (ยกเว้นตัวเอง) + EXTRA เรียงตามชื่อ */
     static List<ResolveInfo> launchables(Context c) {
         final PackageManager pm = c.getPackageManager();
         Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
@@ -76,6 +78,14 @@ final class SplitScreen {
         List<ResolveInfo> out = new ArrayList<ResolveInfo>();
         for (ResolveInfo r : all) {
             if (!c.getPackageName().equals(r.activityInfo.packageName)) out.add(r);
+        }
+        // แอพระบบที่ไม่มีไอคอน launcher แต่เปิดเป็นหน้าต่างได้ (ทดสอบบนรถ 2026-09-29: CarPlay ย่อครึ่งจอได้)
+        for (String s : EXTRA) {
+            try {
+                ResolveInfo r = pm.resolveActivity(new Intent(Intent.ACTION_MAIN)
+                        .setComponent(ComponentName.unflattenFromString(s)), 0);
+                if (r != null && r.activityInfo != null) out.add(r);
+            } catch (Throwable ignored) {}
         }
         Collections.sort(out, new Comparator<ResolveInfo>() {
             public int compare(ResolveInfo a, ResolveInfo b) {
