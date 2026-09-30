@@ -20,69 +20,90 @@ import java.util.List;
  */
 final class CarPlayDivider {
     static final int MIN_CP_W = 720, MIN_LEFT = 420, MIN_BOTTOM = 220, GAP = 4;
-    private static View sView;
-    private static WindowManager.LayoutParams sLp;
+    private static final java.util.List<View> sViews = new java.util.ArrayList<View>();
 
     private CarPlayDivider() {}
 
-    /** เรียกบน main thread · tasks = task ของแต่ละช่อง (-1 = ช่องว่าง) */
+    /** เรียกบน main thread · tasks = task ของแต่ละช่อง (-1 = ช่องว่าง)
+     *  สองที่จับ: ↔ เส้นตั้งระหว่างซ้าย/ขวา · ↕ เส้นนอนระหว่าง CarPlay/ช่องล่าง — ทั้งคู่ปรับขนาด CarPlay (คงสัดส่วน) */
     static void show(final Context app, final List<android.content.ComponentName> apps, final int[] tasks, final Rect[] rects) {
         clear(app);
         final Rect full = new Rect(rects[0].left, rects[0].top, rects[1].right, rects[0].bottom);
         final Rect[] cur = {new Rect(rects[0]), new Rect(rects[1]), new Rect(rects[2])};
-        FrameLayout v = new FrameLayout(app);
-        View line = new View(app);
-        line.setBackgroundColor(0xFF3C4043);
-        v.addView(line, new FrameLayout.LayoutParams(dp(app, 6), -1, Gravity.CENTER_HORIZONTAL));
-        TextView grip = new TextView(app);
-        grip.setText("↔");
-        grip.setTextColor(0xFFF2EFE9);
-        grip.setTextSize(22);
-        grip.setGravity(Gravity.CENTER);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xFFD97757);
-        bg.setShape(GradientDrawable.OVAL);
-        grip.setBackground(bg);
-        v.addView(grip, new FrameLayout.LayoutParams(dp(app, 46), dp(app, 46), Gravity.CENTER));
-        final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(dp(app, 46), 10,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT);
-        lp.gravity = Gravity.TOP | Gravity.START;
-        place(app, lp, cur);
-        v.setOnTouchListener(new View.OnTouchListener() {
-            float downX; int startX; boolean dragging; long lastSent;
-            public boolean onTouch(View view, MotionEvent e) {
-                switch (e.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN:
-                        downX = e.getRawX(); startX = cur[1].left; dragging = false;
-                        return true;
-                    case MotionEvent.ACTION_MOVE:
-                        if (!dragging && Math.abs(e.getRawX() - downX) > 12) dragging = true;
-                        if (dragging) {
-                            compute(full, full.right - (startX + (int) (e.getRawX() - downX)), cur);
-                            place(app, lp, cur);
-                            try { wm(app).updateViewLayout(sView, lp); } catch (Throwable ignored) {}
-                            long now = System.currentTimeMillis();
-                            if (now - lastSent > 60) { lastSent = now; push(tasks, cur); }
-                        }
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        if (!dragging) return true;
-                        push(tasks, cur);
-                        Prefs.of(app).edit().putInt(SplitScreen.K_CP_W, cur[1].width()).apply();
-                        final Rect[] done = {new Rect(cur[0]), new Rect(cur[1]), new Rect(cur[2])};
-                        // จัดปุ่ม ◀ / ตัวเลือกแอพช่องว่าง ตามกรอบใหม่ (หลัง resize เสร็จบนเธรด split)
-                        SplitScreen.worker().postDelayed(new Runnable() {
-                            public void run() { SplitBackButtons.show(app, apps, done); }
-                        }, 150);
-                        return true;
+        final View[] vs = new View[2];
+        final WindowManager.LayoutParams[] lps = new WindowManager.LayoutParams[2];
+        for (int k = 0; k < 2; k++) {
+            final boolean vertical = k == 0;
+            FrameLayout v = new FrameLayout(app);
+            View line = new View(app);
+            line.setBackgroundColor(0xFF3C4043);
+            v.addView(line, vertical ? new FrameLayout.LayoutParams(dp(app, 6), -1, Gravity.CENTER_HORIZONTAL)
+                    : new FrameLayout.LayoutParams(-1, dp(app, 6), Gravity.CENTER_VERTICAL));
+            TextView grip = new TextView(app);
+            grip.setText(vertical ? "↔" : "↕");
+            grip.setTextColor(0xFFF2EFE9);
+            grip.setTextSize(22);
+            grip.setGravity(Gravity.CENTER);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(0xFFD97757);
+            bg.setShape(GradientDrawable.OVAL);
+            grip.setBackground(bg);
+            // ↕ ไว้ซ้าย (กลางแถบบนช่องล่างมีปุ่ม ◀, ขวามีปุ่มขยาย/✕ ของระบบ)
+            FrameLayout.LayoutParams gl = new FrameLayout.LayoutParams(dp(app, 46), dp(app, 46),
+                    vertical ? Gravity.CENTER : (Gravity.CENTER_VERTICAL | Gravity.START));
+            if (!vertical) gl.leftMargin = dp(app, 60);
+            v.addView(grip, gl);
+            final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(vertical ? dp(app, 46) : 10, vertical ? 10 : dp(app, 46),
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT);
+            lp.gravity = Gravity.TOP | Gravity.START;
+            vs[k] = v; lps[k] = lp;
+            v.setOnTouchListener(new View.OnTouchListener() {
+                float down; int startW; boolean dragging; long lastSent;
+                public boolean onTouch(View view, MotionEvent e) {
+                    float pos = vertical ? e.getRawX() : e.getRawY();
+                    switch (e.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            down = pos; startW = cur[1].width(); dragging = false;
+                            return true;
+                        case MotionEvent.ACTION_MOVE:
+                            if (!dragging && Math.abs(pos - down) > 12) dragging = true;
+                            if (dragging) {
+                                int d = (int) (pos - down);
+                                // ↔ ลากขวา = CarPlay แคบลง · ↕ ลากลง = CarPlay สูงขึ้น (กว้างขึ้นตามสัดส่วน)
+                                int w = vertical ? startW - d : startW + d * SplitScreen.CP_W / SplitScreen.CP_H;
+                                compute(full, w, cur);
+                                placeAll(app, vs, lps, cur);
+                                long now = System.currentTimeMillis();
+                                if (now - lastSent > 60) { lastSent = now; push(tasks, cur); }
+                            }
+                            return true;
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            if (!dragging) return true;
+                            push(tasks, cur);
+                            Prefs.of(app).edit().putInt(SplitScreen.K_CP_W, cur[1].width()).apply();
+                            final Rect[] done = {new Rect(cur[0]), new Rect(cur[1]), new Rect(cur[2])};
+                            // จัดปุ่ม ◀ / ตัวเลือกแอพช่องว่าง ตามกรอบใหม่ (หลัง resize เสร็จบนเธรด split)
+                            SplitScreen.worker().postDelayed(new Runnable() {
+                                public void run() { SplitBackButtons.show(app, apps, done); }
+                            }, 150);
+                            return true;
+                    }
+                    return false;
                 }
-                return false;
-            }
-        });
-        try { wm(app).addView(v, lp); sView = v; sLp = lp; } catch (Throwable ignored) {}
+            });
+        }
+        place(app, lps, cur);
+        for (int k = 0; k < 2; k++) {
+            try { wm(app).addView(vs[k], lps[k]); sViews.add(vs[k]); } catch (Throwable ignored) {}
+        }
+    }
+
+    private static void placeAll(Context app, View[] vs, WindowManager.LayoutParams[] lps, Rect[] cur) {
+        place(app, lps, cur);
+        for (int k = 0; k < 2; k++) { try { wm(app).updateViewLayout(vs[k], lps[k]); } catch (Throwable ignored) {} }
     }
 
     /** กรอบ 3 ช่องจากความกว้าง CarPlay (บีบให้อยู่ในขอบเขต) */
@@ -105,19 +126,23 @@ final class CarPlayDivider {
         });
     }
 
-    private static void place(Context app, WindowManager.LayoutParams lp, Rect[] cur) {
+    private static void place(Context app, WindowManager.LayoutParams[] lps, Rect[] cur) {
         int cap = dp(app, 44);
-        lp.x = (cur[0].right + cur[1].left) / 2 - lp.width / 2;
-        lp.y = cur[0].top + cap;
-        lp.height = Math.max(dp(app, 60), cur[0].height() - cap);
+        WindowManager.LayoutParams v = lps[0], h = lps[1];
+        v.x = (cur[0].right + cur[1].left) / 2 - v.width / 2;
+        v.y = cur[0].top + cap;
+        v.height = Math.max(dp(app, 60), cur[0].height() - cap);
+        h.x = cur[1].left + dp(app, 30);
+        h.width = cur[1].width() - dp(app, 60);
+        h.y = (cur[1].bottom + cur[2].top) / 2 - h.height / 2;
     }
 
-    static void setVisible(boolean on) { if (sView != null) sView.setVisibility(on ? View.VISIBLE : View.GONE); }
+    static void setVisible(boolean on) { for (View v : sViews) v.setVisibility(on ? View.VISIBLE : View.GONE); }
 
     /** เรียกบน main thread */
     static void clear(Context app) {
-        if (sView != null) { try { wm(app).removeView(sView); } catch (Throwable ignored) {} }
-        sView = null; sLp = null;
+        for (View v : sViews) { try { wm(app).removeView(v); } catch (Throwable ignored) {} }
+        sViews.clear();
     }
 
     private static WindowManager wm(Context c) { return (WindowManager) c.getSystemService(Context.WINDOW_SERVICE); }
