@@ -24,7 +24,9 @@ final class QuickPanel {
     private static Handler sMain;
 
     private static TextView[] sDrive, sRegen;
-    private static TextView sAc, sTemp, sFan, sStatus;
+    private static TextView sAc, sTemp, sFan, sStatus, sWash, sWashHint;
+    private static Integer sWashVal;
+    private static long sWashArmAt;
     private static Float sTempVal;
     private static Integer sFanVal;
     private static Boolean sAcVal;
@@ -107,6 +109,33 @@ final class QuickPanel {
             }
         });
 
+        // จอดซ้อนคัน = โหมดล้างรถแบบสายพาน (MOVING) ของรถเอง: ล็อครถแล้วยังค้างเกียร์ N
+        root.addView(label(app, "จอดซ้อนคัน (ค้างเกียร์ N ตอนล็อครถ)"));
+        LinearLayout wr = new LinearLayout(app);
+        wr.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(wr, top(app, 6));
+        sWash = pill(app, "…", false);
+        sWash.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (sWashVal == null) return;
+                final boolean on = sWashVal == Vhal.WASH_MOVING;
+                if (!on && System.currentTimeMillis() - sWashArmAt > 4000) {   // เปิด = แตะ 2 ครั้ง (กันแตะพลาด)
+                    sWashArmAt = System.currentTimeMillis();
+                    sWash.setText("แตะอีกครั้งเพื่อยืนยัน");
+                    return;
+                }
+                sWashArmAt = 0;
+                run(app, new Runnable() {
+                    public void run() { Vhal.setInt(app, Vhal.WASH_MODE, on ? Vhal.WASH_OFF : Vhal.WASH_MOVING, Vhal.WASH_AREAS); }
+                });
+            }
+        });
+        wr.addView(sWash, new LinearLayout.LayoutParams(dp(app, 230), dp(app, 56)));
+        sWashHint = text(app, "ใช้โหมดล้างรถแบบสายพานของรถเอง · จอดบนพื้นราบ เข้าเกียร์ N ก่อน · ล้อไม่ล็อก รถเข็นได้", 12, MUTED);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(0, -2, 1);
+        hl.leftMargin = dp(app, 12);
+        wr.addView(sWashHint, hl);
+
         sStatus = text(app, "กำลังอ่านค่าจากรถ…", 13, MUTED);
         root.addView(sStatus, top(app, 12));
 
@@ -151,6 +180,8 @@ final class QuickPanel {
         final Boolean ac = Vhal.getBool(app, Vhal.HVAC_AC_ON, Vhal.HVAC_AREAS);
         final Float temp = Vhal.getFloat(app, Vhal.HVAC_TEMP, Vhal.TEMP_AREAS);
         final Integer fan = Vhal.getInt(app, Vhal.HVAC_FAN, Vhal.HVAC_AREAS);
+        final boolean washOk = Vhal.supported(app, Vhal.WASH_MODE);
+        final Integer wash = washOk ? Vhal.getInt(app, Vhal.WASH_MODE, Vhal.WASH_AREAS) : null;
         final boolean car = Vhal.cpm(app) != null;
         main().post(new Runnable() {
             public void run() {
@@ -164,6 +195,14 @@ final class QuickPanel {
                 sTemp.setText(temp == null ? "– °C" : fmtTemp(temp));
                 sFanVal = fan;
                 sFan.setText(fan == null ? "พัดลม –" : "พัดลม " + fan);
+                sWashVal = wash;
+                if (!washOk) { sWash.setText("รถไม่รองรับ"); paint(sWash, false); sWash.setEnabled(false); }
+                else if (wash == null) { sWash.setText("อ่านสถานะไม่ได้"); paint(sWash, false); }
+                else if (System.currentTimeMillis() - sWashArmAt > 4000) {
+                    boolean on = wash == Vhal.WASH_MOVING;
+                    sWash.setText(on ? "เปิดอยู่ · แตะเพื่อปิด" : "ปิดอยู่ · แตะเพื่อเปิด");
+                    paint(sWash, on);
+                }
                 sStatus.setText(!car ? "เชื่อมต่อระบบรถไม่ได้ (เครื่องนี้ไม่มี VHAL?)"
                         : (drive == null && regen == null && ac == null) ? "อ่านค่าจากรถไม่ได้ — ปุ่มอาจไม่ทำงาน"
                         : "ค่าที่แสดง = ค่าจริงจากรถ");

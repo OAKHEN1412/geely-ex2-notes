@@ -31,6 +31,11 @@ final class Vhal {
     static final int[] HVAC_AREAS = {1, 5, 0x31, 0};
     static final int HVAC_TEMP = 0x25401036;          // float °C · area 1 คนขับ, 4 ผู้โดยสาร
     static final int[] TEMP_AREAS = {1, 4};
+    // ---- โหมดล้างรถของรถเอง (ECarX adaptapi ISceneMode ใน ConnAdaptor/ca_fix ของจอนี้) ----
+    // MOVING = ล้างแบบสายพาน: รถค้างเกียร์ N ลาก/เข็นได้ → ใช้จอดซ้อนคัน · เลขรูปแบบเดียวกับโหมดขับ 0x22010100 ที่สั่งผ่าน VHAL ได้
+    static final int WASH_MODE = 0x2f010200;
+    static final int WASH_OFF = 0x2f010200, WASH_MOVING = 0x2f010201, WASH_WASHING = 0x2f010202;
+    static final int[] WASH_AREAS = {0, 1, 0x1000000};
 
     private static Object sCar, sCpm;
     private static boolean sNoCar;   // ไม่มี android.car (เครื่องจำลอง) → ไม่ต้องลองซ้ำ
@@ -73,6 +78,24 @@ final class Vhal {
             Log.w(TAG, "car connect: " + t);
             return null;
         }
+    }
+
+    private static java.util.Set<Integer> sProps;
+
+    /** รถประกาศ property นี้ไว้จริงไหม (getPropertyList) — ใช้กันปุ่มสั่งของที่รถไม่มี */
+    static boolean supported(Context c, int prop) {
+        Object m = cpm(c);
+        if (m == null) return false;
+        if (sProps == null) {
+            java.util.Set<Integer> s = new java.util.HashSet<Integer>();
+            try {
+                for (Object cfg : (java.util.List<?>) m.getClass().getMethod("getPropertyList").invoke(m))
+                    s.add((Integer) cfg.getClass().getMethod("getPropertyId").invoke(cfg));
+            } catch (Throwable t) { Log.w(TAG, "getPropertyList: " + t); return false; }
+            sProps = s;
+            Log.i(TAG, "รถมี property " + s.size() + " ตัว");
+        }
+        return sProps.contains(prop);
     }
 
     static Integer getInt(Context c, int prop, int... areas) {
