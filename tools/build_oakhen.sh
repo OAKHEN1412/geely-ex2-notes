@@ -84,6 +84,7 @@ inj='''        <service android:name="com.oakhen.ex2dev.DevService" android:expo
             </intent-filter>
         </activity>
         <activity android:name="com.oakhen.ex2dev.SplitBackdropActivity" android:exported="false" android:theme="@android:style/Theme.Black.NoTitleBar" android:excludeFromRecents="true" android:taskAffinity="com.oakhen.ex2dev.backdrop" android:launchMode="singleTask" android:resizeableActivity="false"/>
+        <activity android:name="com.oakhen.ex2dev.TripActivity" android:exported="false" android:label="บันทึกการเดินทาง" android:theme="@android:style/Theme.Material"/>
         <!-- แบ่งจอรวมอยู่ในหน้า OAKHEN (SettingsActivity) + กล่องลอยแล้ว — ไม่มีไอคอนแยก -->
         <activity android:name="com.oakhen.ex2dev.SplitActivity" android:exported="false" android:label="แบ่งจอ" android:theme="@android:style/Theme.Material" android:excludeFromRecents="true" android:taskAffinity="com.oakhen.ex2dev.split" android:launchMode="singleTask" android:resizeableActivity="false"/>
     </application>'''

@@ -74,6 +74,27 @@ public class SettingsActivity extends Activity {
         sectionLabel(root, "แบ่งจอ");
         splitCard(root);
 
+        // บันทึกการเดินทาง + ค่าใช้จ่าย
+        LinearLayout trip = new LinearLayout(this);
+        trip.setOrientation(LinearLayout.VERTICAL);
+        trip.setBackground(cardBg());
+        int tp = dp(14); trip.setPadding(tp, tp, tp, tp);
+        trip.setClickable(true);
+        TextView tt = new TextView(this);
+        tt.setText("📒 บันทึกการเดินทาง & ค่าใช้จ่าย  ›");
+        tt.setTextColor(CREAM); tt.setTextSize(17);
+        trip.addView(tt);
+        TextView td = new TextView(this);
+        td.setText("บันทึกทุกทริปเอง: ระยะทาง, แบตที่ใช้, kWh, ค่าไฟต่อทริป, การชาร์จ · สรุปรายเดือน");
+        td.setTextColor(MUTED); td.setTextSize(13);
+        trip.addView(td, marginTop(dp(2)));
+        trip.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                try { startActivity(new Intent(SettingsActivity.this, TripActivity.class)); } catch (Throwable e) { toast("เปิดหน้าบันทึกไม่ได้"); }
+            }
+        });
+        root.addView(trip, marginTop(dp(12)));
+
         // ========== A) ฟีเจอร์ EX2 (ของเรา) ==========
         sectionLabel(root, "ฟีเจอร์ EX2 · เพิ่มโดยเรา");
 

@@ -37,6 +37,8 @@ public class DevService extends Service {
             try { SensorGuard.apply(app); } catch (Throwable t) { Log.e(TAG, "SensorGuard", t); }
             // ปุ่มพวงมาลัย (ดักรหัส + ทำตามที่ตั้งไว้ในหน้า OAKHEN)
             try { SwcWatch.start(app); } catch (Throwable t) { Log.e(TAG, "SwcWatch", t); }
+            // บันทึกการเดินทาง (อ่านค่ารถทุก 5 วิตอนจอเปิด)
+            try { TripLog.start(app); } catch (Throwable t) { Log.e(TAG, "TripLog", t); }
             // แบ่งจอปิดแอนิเมชันชั่วคราว — ถ้า process ตายก่อนคืนค่า ให้คืนตอนนี้
             try { SplitScreen.animRestore(app); } catch (Throwable t) { Log.e(TAG, "animRestore", t); }
             // task ที่ค้างโหมดหน้าต่างจากแบ่งจอรอบก่อน (process ตาย/อัปเดตแอพ) → คืนเต็มจอ ไม่งั้นเปิดจากหน้าหลักแล้วได้ครึ่งจอ
