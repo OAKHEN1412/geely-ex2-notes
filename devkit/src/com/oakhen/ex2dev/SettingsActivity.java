@@ -132,6 +132,16 @@ public class SettingsActivity extends Activity {
             }
         });
 
+        Switch timeTh = row(root, "เวลาไทยอัตโนมัติ",
+                "ตั้งโซนเวลา Asia/Bangkok + เทียบเวลากับ time.google.com ตอนสตาร์ทและทุก 6 ชม. · " + TimeKeeper.last(),
+                Prefs.KEY_TIME_TH, true, false);
+        timeTh.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                sp.edit().putBoolean(Prefs.KEY_TIME_TH, on).apply();
+                if (on) Vhal.thread().post(new Runnable() { public void run() { TimeKeeper.syncNow(app); } });
+            }
+        });
+
         Switch compass = row(root, "เข็มทิศ Google Maps ใช้ทิศจาก GPS",
                 "จอนี้ไม่มีเข็มทิศที่ปรับเทียบ ลูกศรใน Maps เลยหมุนไปมา · เปิด = ตัดเซ็นเซอร์เฉพาะ Maps ให้หันตามทิศวิ่งแบบ Waze",
                 Prefs.KEY_COMPASS_OFF, false, false);
