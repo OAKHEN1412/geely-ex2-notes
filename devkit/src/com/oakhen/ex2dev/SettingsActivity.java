@@ -74,6 +74,27 @@ public class SettingsActivity extends Activity {
         sectionLabel(root, "แบ่งจอ");
         splitCard(root);
 
+        // อัปเดตแอป (OAKHEN + แอปที่ลงไว้)
+        LinearLayout upd = new LinearLayout(this);
+        upd.setOrientation(LinearLayout.VERTICAL);
+        upd.setBackground(cardBg());
+        int up = dp(14); upd.setPadding(up, up, up, up);
+        upd.setClickable(true);
+        TextView ut = new TextView(this);
+        ut.setText("⬆ อัปเดตแอป  ›");
+        ut.setTextColor(CREAM); ut.setTextSize(17);
+        upd.addView(ut);
+        TextView ud = new TextView(this);
+        ud.setText("EX2 BY OAKHEN build " + AppUpdater.ownBuild(this) + " · YouTube, YT Music, Maps, SmartTube, Disney+ … อัปเดตจากจอรถได้เลย ไม่ต้องต่อคอม");
+        ud.setTextColor(MUTED); ud.setTextSize(13);
+        upd.addView(ud, marginTop(dp(2)));
+        upd.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                try { startActivity(new Intent(SettingsActivity.this, UpdateActivity.class)); } catch (Throwable e) { toast("เปิดหน้าอัปเดตไม่ได้"); }
+            }
+        });
+        root.addView(upd, marginTop(dp(12)));
+
         // บันทึกการเดินทาง + ค่าใช้จ่าย
         LinearLayout trip = new LinearLayout(this);
         trip.setOrientation(LinearLayout.VERTICAL);

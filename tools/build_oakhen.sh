@@ -44,18 +44,31 @@ if 'name="th"' not in s:
 print("    locales_config th:", 'name="th"' in io.open(lc,encoding='utf-8').read())
 PY
 
-echo ">>> [3/6] rebrand app_name + version"
-py -X utf8 - "$WORK" <<'PY'
+echo ">>> [3/6] rebrand app_name + version (build = จำนวน commit) + ค่าอัปเดตเอง"
+BUILD_N=$(git -C "$REPO" rev-list --count HEAD)
+TOKEN_FILE="$REPO/_signing-kit/update-token.txt"   # GitHub fine-grained token: repo นี้ · Contents อ่านอย่างเดียว (git ไม่เก็บ _signing-kit/)
+mkdir -p "$WORK/assets"
+if [ -s "$TOKEN_FILE" ]; then
+  { echo "repo=OAKHEN1412/geely-ex2-notes"; printf "token=%s
+" "$(tr -d ' 
+
+' < "$TOKEN_FILE")"; } > "$WORK/assets/oakhen_update.properties"
+  echo "    อัปเดตเอง: ใส่ token แล้ว (ไม่แสดงค่า)"
+else
+  echo "repo=OAKHEN1412/geely-ex2-notes" > "$WORK/assets/oakhen_update.properties"
+  echo "    !!! ไม่มี $TOKEN_FILE — ปุ่มอัปเดต OAKHEN ในรถจะขึ้นว่ายังไม่ได้ใส่ token"
+fi
+py -X utf8 - "$WORK" "$BUILD_N" <<'PY'
 import sys,io
-w=sys.argv[1]
+w=sys.argv[1]; n=sys.argv[2]
 p=w+"/res/values/strings.xml"; s=io.open(p,encoding='utf-8').read()
 import re
 s=re.sub(r'<string name="app_name">[^<]*</string>','<string name="app_name">EX2 BY OAKHEN</string>',s)
 io.open(p,'w',encoding='utf-8').write(s)
 y=w+"/apktool.yml"; t=io.open(y,encoding='utf-8').read()
-t=re.sub(r'versionName: .*','versionName: 1.0-oakhen',t)
+t=re.sub(r'versionName: .*','versionName: 1.0-oakhen.'+n,t)
 io.open(y,'w',encoding='utf-8').write(t)
-print("    app_name EX2 BY OAKHEN:", 'EX2 BY OAKHEN' in io.open(p,encoding='utf-8').read())
+print("    app_name EX2 BY OAKHEN:", 'EX2 BY OAKHEN' in io.open(p,encoding='utf-8').read(), "| versionName 1.0-oakhen."+n)
 PY
 
 echo ">>> [4/6] ฉีด dev harness (classes17.dex + service/receiver)"
@@ -84,6 +97,7 @@ inj='''        <service android:name="com.oakhen.ex2dev.DevService" android:expo
             </intent-filter>
         </activity>
         <activity android:name="com.oakhen.ex2dev.SplitBackdropActivity" android:exported="false" android:theme="@android:style/Theme.Black.NoTitleBar" android:excludeFromRecents="true" android:taskAffinity="com.oakhen.ex2dev.backdrop" android:launchMode="singleTask" android:resizeableActivity="false"/>
+        <activity android:name="com.oakhen.ex2dev.UpdateActivity" android:exported="false" android:label="อัปเดตแอป" android:theme="@android:style/Theme.Material"/>
         <activity android:name="com.oakhen.ex2dev.TripActivity" android:exported="false" android:label="บันทึกการเดินทาง" android:theme="@android:style/Theme.Material"/>
         <!-- แบ่งจอรวมอยู่ในหน้า OAKHEN (SettingsActivity) + กล่องลอยแล้ว — ไม่มีไอคอนแยก -->
         <activity android:name="com.oakhen.ex2dev.SplitActivity" android:exported="false" android:label="แบ่งจอ" android:theme="@android:style/Theme.Material" android:excludeFromRecents="true" android:taskAffinity="com.oakhen.ex2dev.split" android:launchMode="singleTask" android:resizeableActivity="false"/>
