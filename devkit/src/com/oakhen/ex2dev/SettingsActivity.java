@@ -122,6 +122,8 @@ public class SettingsActivity extends Activity {
             }
         });
 
+        swcCard(root);
+
         infoRow(root, "กระจกค่อยๆ ลงตอนเปิดประตู",
                 "ลดทีละสเต็ปจนถึง 20% · ปิดประตูกลางทาง = หยุดแล้วปิดกระจก · ทำงานอัตโนมัติ (ฝังในแอป)");
 
@@ -191,6 +193,83 @@ public class SettingsActivity extends Activity {
             Toast.makeText(this, "เปิดแอพเดิมไม่ได้", Toast.LENGTH_SHORT).show();
         }
     }
+
+    // ---------- ปุ่มพวงมาลัย: ดักรหัส + ตั้งการกระทำ ----------
+    private LinearLayout swcList;
+    private TextView swcStatus;
+    private final android.os.Handler ui = new android.os.Handler();
+    private final Runnable swcTick = new Runnable() {
+        public void run() { renderSwc(); ui.postDelayed(this, 700); }
+    };
+    private String swcSig = "";
+
+    private void swcCard(LinearLayout root) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(cardBg());
+        int p = dp(14);
+        card.setPadding(p, p, p, p);
+        root.addView(card, marginTop(dp(12)));
+        TextView t = new TextView(this);
+        t.setText("ปุ่มพวงมาลัย");
+        t.setTextColor(CREAM); t.setTextSize(17);
+        card.addView(t);
+        TextView d = new TextView(this);
+        d.setText("กดปุ่มบนพวงมาลัยทีละปุ่ม รหัสจะขึ้นด้านล่าง · แตะปุ่มขวาเพื่อเลือกว่าปุ่มนั้นให้ทำอะไร (ค่าเริ่ม = ไม่ทำอะไร ใช้งานเดิมของรถ)");
+        d.setTextColor(MUTED); d.setTextSize(13);
+        card.addView(d, marginTop(dp(2)));
+        swcStatus = new TextView(this);
+        swcStatus.setTextColor(MUTED); swcStatus.setTextSize(13);
+        card.addView(swcStatus, marginTop(dp(8)));
+        swcList = new LinearLayout(this);
+        swcList.setOrientation(LinearLayout.VERTICAL);
+        card.addView(swcList, marginTop(dp(4)));
+    }
+
+    private void renderSwc() {
+        if (swcList == null) return;
+        java.util.List<SwcWatch.Seen> seen = SwcWatch.seen();
+        swcStatus.setText("สถานะ: " + SwcWatch.status() + (seen.isEmpty() ? " · ยังไม่มีปุ่มถูกกด" : ""));
+        StringBuilder sig = new StringBuilder();
+        for (SwcWatch.Seen s : seen) sig.append(s.prop).append(':').append(s.count).append(':').append(s.last).append(':').append(SwcWatch.action(this, s.prop)).append(System.currentTimeMillis() - s.at < 1500).append(';');
+        if (sig.toString().equals(swcSig)) return;
+        swcSig = sig.toString();
+        swcList.removeAllViews();
+        for (final SwcWatch.Seen s : seen) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            TextView info = new TextView(this);
+            boolean fresh = System.currentTimeMillis() - s.at < 1500;
+            info.setText(String.format("รหัส 0x%08X · ค่าล่าสุด %d · %d ครั้ง%s", s.prop, s.last, s.count, fresh ? "  ● เพิ่งกด" : ""));
+            info.setTextColor(fresh ? CLAY : CREAM); info.setTextSize(14);
+            row.addView(info, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            String a = SwcWatch.action(this, s.prop);
+            int idx = java.util.Arrays.asList(SwcWatch.ACTIONS).indexOf(a);
+            if (idx < 0) idx = 0;
+            final int cur = idx;
+            TextView btn = new TextView(this);
+            btn.setText(SwcWatch.ACTION_LABELS[cur] + "  ▸");
+            btn.setTextSize(15);
+            btn.setGravity(Gravity.CENTER);
+            btn.setTextColor(cur == 0 ? CREAM : BG);
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(cur == 0 ? 0xFF3A3B3F : CLAY);
+            g.setCornerRadius(dp(10));
+            btn.setBackground(g);
+            btn.setPadding(dp(14), 0, dp(14), 0);
+            btn.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    SwcWatch.setAction(SettingsActivity.this, s.prop, SwcWatch.ACTIONS[(cur + 1) % SwcWatch.ACTIONS.length]);
+                    renderSwc();
+                }
+            });
+            row.addView(btn, new LinearLayout.LayoutParams(dp(190), dp(44)));
+            swcList.addView(row, marginTop(dp(6)));
+        }
+    }
+
+    @Override protected void onResume() { super.onResume(); ui.post(swcTick); }
+    @Override protected void onPause() { super.onPause(); ui.removeCallbacks(swcTick); }
 
     /** การ์ดแบ่งจอ: เลือกแอพ (หน้า SplitActivity) · ชุดล่าสุด · คืนเต็มจอ */
     private void splitCard(LinearLayout root) {

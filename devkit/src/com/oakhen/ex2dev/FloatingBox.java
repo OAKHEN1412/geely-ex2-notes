@@ -180,7 +180,12 @@ public class FloatingBox {
             });
             panel.addView(dim);
         }
-        Button split = mkBtn(ctx, "🪟 แบ่งจอ");
+        Button car = mkBtn(ctx, "🚗 ควบคุมรถ (โหมดขับ/แอร์)");
+        car.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { collapse(wm); QuickPanel.toggle(ctx); }
+        });
+        panel.addView(car);
+        Button split = mkBtn(ctx, "▦ แบ่งจอ");   // 🪟 (Unicode 13) เป็นกล่องบน Android 9
         split.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 collapse(wm);
