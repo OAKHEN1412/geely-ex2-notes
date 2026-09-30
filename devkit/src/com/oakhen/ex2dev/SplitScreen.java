@@ -233,6 +233,53 @@ final class SplitScreen {
         } catch (Throwable t) { Log.w(TAG, "exitAll", t); }
     }
 
+    /** เวลาที่เริ่มเปิดชุดล่าสุด — ช่วงจัดหน้าต่างพื้นดำอาจถูกบังชั่วคราว ห้ามจบแบ่งจอ */
+    static volatile long sLaunchAt;
+
+    /**
+     * แบ่งจอถูกบัง (กดหน้าหลัก / เปิดแอพเต็มจออื่น) → จบแบ่งจอ: เอาปุ่ม/เส้นแบ่ง/พื้นดำออก และคืนหน้าต่างทุกบานเป็นเต็มจอ
+     * ไม่งั้น task ค้างโหมดหน้าต่าง → เปิดแอพจากหน้าหลักรถทีหลัง ระบบดึงหน้าต่างครึ่งจอเดิมขึ้นมา (บั๊กที่เจอกับ YouTube)
+     * task บนสุดที่ไม่ใช่หน้าหลัก (= แอพที่เพิ่งกดเปิด) ขึ้นหน้าเป็นเต็มจอ ที่เหลือคืนแบบอยู่ข้างหลัง
+     */
+    static void endSession(Context c) {
+        SplitBackButtons.clear(c);
+        SplitDividers.clear(c);
+        animRestore(c);
+        String home = null;
+        try {
+            ResolveInfo h = c.getPackageManager().resolveActivity(
+                    new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0);
+            if (h != null) home = h.activityInfo.packageName;
+        } catch (Throwable ignored) {}
+        Point scr = new Point();
+        ((WindowManager) c.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealSize(scr);
+        try {
+            ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+            boolean first = true;
+            for (ActivityManager.RunningTaskInfo t : am.getRunningTasks(30)) {
+                ComponentName top = t.topActivity != null ? t.topActivity : t.baseActivity;
+                String pkg = top != null ? top.getPackageName() : "";
+                if (c.getPackageName().equals(pkg)) continue;
+                if (pkg.equals(home)) { first = false; continue; }
+                Rect b = taskBounds(t.id);
+                boolean windowed = b != null && !b.isEmpty() && (b.width() < scr.x - 8 || b.height() < scr.y - 8);
+                if (windowed) {
+                    // เปลี่ยนโหมดอย่างเดียว task ยังจำกรอบครึ่งจอ (เห็นครึ่งจอ+ดำ บนเครื่องจำลอง) → ขยายกรอบเต็มจอก่อน
+                    Rect all = new Rect(0, 0, scr.x, scr.y);
+                    if (!resize(t.id, all)) {
+                        // task ค้างจากรุ่นก่อน: อยู่โหมดเต็มจอแล้วแต่ยังจำกรอบครึ่งจอ → resize ไม่ได้ ต้องกลับเป็นหน้าต่างก่อน
+                        setMode(t.id, WINDOWING_MODE_FREEFORM, false);
+                        resize(t.id, all);
+                    }
+                    setMode(t.id, WINDOWING_MODE_FULLSCREEN, first);
+                    Log.i(TAG, "endSession: task " + t.id + " " + pkg + " -> fullscreen" + (first ? " (top)" : ""));
+                }
+                first = false;
+            }
+        } catch (Throwable t) { Log.w(TAG, "endSession", t); }
+        SplitBackdropActivity.dismiss();
+    }
+
     private static Integer runningTaskOf(Context c, String pkg) {
         try {
             ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
@@ -248,11 +295,13 @@ final class SplitScreen {
         return ActivityManager.class.getMethod("getService").invoke(null);
     }
 
-    private static boolean setMode(int taskId, int mode) {
+    private static boolean setMode(int taskId, int mode) { return setMode(taskId, mode, true); }
+
+    private static boolean setMode(int taskId, int mode, boolean toTop) {
         try {
             Object s = iam();
             Method m = s.getClass().getMethod("setTaskWindowingMode", int.class, int.class, boolean.class);
-            Object r = m.invoke(s, taskId, mode, true);
+            Object r = m.invoke(s, taskId, mode, toTop);
             return !(r instanceof Boolean) || (Boolean) r;
         } catch (Throwable t) {
             Log.w(TAG, "setTaskWindowingMode " + taskId, t);
@@ -352,6 +401,7 @@ final class SplitScreen {
         if (picked == null || picked.isEmpty()) return;
         final List<ComponentName> apps = arrange(picked);
         final Context app = ctx.getApplicationContext();
+        sLaunchAt = System.currentTimeMillis();
         int n = 0;
         for (ComponentName c : apps) if (c != null) n++;
         Prefs.of(app).edit().putString(K_LAST, flatten(apps)).putInt("split_count", Math.max(2, Math.min(3, n))).apply();

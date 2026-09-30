@@ -1,7 +1,10 @@
 package com.oakhen.ex2dev;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.os.Handler;
+import android.os.Looper;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -43,11 +46,23 @@ public class SplitBackdropActivity extends Activity {
     static boolean isVisible() { return sVisible; }
 
     @Override protected void onStart() { super.onStart(); sVisible = true; }
-    @Override protected void onStop() { super.onStop(); sVisible = false; }
+    @Override protected void onStop() {
+        super.onStop();
+        sVisible = false;
+        if (isFinishing()) return;
+        // ถูกบังค้าง (ไม่ใช่แค่วูบตอนจัดหน้าต่าง) → จบแบ่งจอ คืนทุกหน้าต่างเป็นเต็มจอ
+        final Context app = getApplicationContext();
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            public void run() {
+                if (sVisible || System.currentTimeMillis() - SplitScreen.sLaunchAt < 4000) return;
+                SplitScreen.worker().post(new Runnable() { public void run() { SplitScreen.endSession(app); } });
+            }
+        }, 400);
+    }
 
     private void goHome() {
-        SplitBackButtons.clear(this);   // ปุ่ม/ตัวเลือกแอพ ไม่ลอยค้างบนหน้าหลัก
-        SplitDividers.clear(this);
+        final Context app = getApplicationContext();   // จบแบ่งจอ: หน้าต่างกลับเต็มจอ ปุ่ม/ตัวเลือกแอพไม่ลอยค้าง
+        SplitScreen.worker().post(new Runnable() { public void run() { SplitScreen.endSession(app); } });
         finish();
         try {
             startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)

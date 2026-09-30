@@ -35,6 +35,10 @@ public class DevService extends Service {
             try { GmsGuard.start(app); } catch (Throwable t) { Log.e(TAG, "GmsGuard", t); }
             // แบ่งจอปิดแอนิเมชันชั่วคราว — ถ้า process ตายก่อนคืนค่า ให้คืนตอนนี้
             try { SplitScreen.animRestore(app); } catch (Throwable t) { Log.e(TAG, "animRestore", t); }
+            // task ที่ค้างโหมดหน้าต่างจากแบ่งจอรอบก่อน (process ตาย/อัปเดตแอพ) → คืนเต็มจอ ไม่งั้นเปิดจากหน้าหลักแล้วได้ครึ่งจอ
+            SplitScreen.worker().post(new Runnable() {
+                public void run() { try { SplitScreen.endSession(app); } catch (Throwable t) { Log.e(TAG, "endSession", t); } }
+            });
             // โผล่กล่องตอนบูตเฉพาะเมื่อ เปิดกล่องลอย + เปิด "เริ่มอัตโนมัติหลังบูต" (สวิตช์แยกในหน้าตั้งค่า)
             if (Prefs.get(app, Prefs.KEY_FLOATING, true) && Prefs.get(app, Prefs.KEY_AUTOSTART, true)) {
                 new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
