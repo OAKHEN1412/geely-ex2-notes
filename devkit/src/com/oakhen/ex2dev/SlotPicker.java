@@ -54,9 +54,14 @@ final class SlotPicker {
     }
 
     /** โหลดรายชื่อแอพล่วงหน้า (เรียกตอนเริ่มแบ่งจอ) — ไม่ใช้เธรด split เพื่อไม่ถ่วงการจัดหน้าต่าง */
+    private static long sLoadedAt;
+
     static synchronized void preload(final Context app, final Runnable done) {
-        if (sCache != null) { if (done != null) main().post(done); return; }
-        if (done != null) sWaiting.add(done);   // โหลดค้างอยู่ก็รอผลรอบเดียวกัน
+        if (sCache != null) {
+            if (done != null) main().post(done);
+            if (sLoading || System.currentTimeMillis() - sLoadedAt < 60000) return;
+            // มีรายการเดิมใช้ไปก่อน แล้วโหลดใหม่เบื้องหลัง (แอพที่ลงใหม่/ลบไป)
+        } else if (done != null) sWaiting.add(done);   // โหลดค้างอยู่ก็รอผลรอบเดียวกัน
         if (sLoading) return;
         sLoading = true;
         new Thread(new Runnable() {
@@ -71,7 +76,7 @@ final class SlotPicker {
                 } catch (Throwable ignored) {}
                 List<Runnable> w;
                 synchronized (SlotPicker.class) {
-                    sCache = out; sLoading = false;
+                    sCache = out; sLoading = false; sLoadedAt = System.currentTimeMillis();
                     w = new ArrayList<Runnable>(sWaiting); sWaiting.clear();
                 }
                 for (Runnable r : w) main().post(r);
@@ -155,7 +160,7 @@ final class SlotPicker {
         lp.gravity = Gravity.TOP | Gravity.START;
         lp.x = r.left;
         lp.y = r.top;
-        try { wm.addView(root, lp); sViews.put(slot, root); } catch (Throwable ignored) {}
+        try { wm.addView(root, lp); sViews.put(slot, root); TapExclude.apply(root, lp); } catch (Throwable ignored) {}
     }
 
     /** เรียกบน main thread */

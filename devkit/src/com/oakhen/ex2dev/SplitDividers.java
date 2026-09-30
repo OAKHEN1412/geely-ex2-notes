@@ -68,7 +68,7 @@ final class SplitDividers {
             lp.gravity = Gravity.TOP | Gravity.START;
             place(app, idx, lp);
             v.setOnTouchListener(new DragListener(app, idx));
-            try { wm.addView(v, lp); } catch (Throwable t) { continue; }
+            try { wm.addView(v, lp); TapExclude.apply(v, lp); } catch (Throwable t) { continue; }
             sViews.add(v); sLps.add(lp);
         }
     }
@@ -118,7 +118,9 @@ final class SplitDividers {
                     }
                     return true;
                 case MotionEvent.ACTION_UP:
-                    if (dragging) pushPair(i); else swap(i);
+                    // แตะ = สลับ เฉพาะตรงปุ่ม ⇄ (เดิมทั้งแถบ 46px สูงเต็มจอ — แตะโดนขอบแอพตอนรถกระเทือนแล้วสลับเอง)
+                    if (dragging) pushPair(i);
+                    else if (Math.abs(e.getY() - v.getHeight() / 2f) <= dp(app, 30)) swap(i);
                     raiseAll(app);   // ให้ทุกหน้าต่างอยู่หน้าพื้นดำเสมอหลังปรับ
                     return true;
                 case MotionEvent.ACTION_CANCEL:
@@ -145,6 +147,7 @@ final class SplitDividers {
             sRects[i + 1].left = sRects[i].right + GAP;
             relayout(app, i);
             pushPair(i);
+            SplitBackButtons.onSwap(app, i, sRects);   // ช่อง/ชุดล่าสุดตามลำดับใหม่
         }
     }
 
@@ -152,7 +155,7 @@ final class SplitDividers {
         if (i >= sViews.size()) return;
         WindowManager wm = (WindowManager) app.getSystemService(Context.WINDOW_SERVICE);
         place(app, i, sLps.get(i));
-        try { wm.updateViewLayout(sViews.get(i), sLps.get(i)); } catch (Throwable ignored) {}
+        try { wm.updateViewLayout(sViews.get(i), sLps.get(i)); TapExclude.apply(sViews.get(i), sLps.get(i)); } catch (Throwable ignored) {}
     }
 
     /** ส่งกรอบใหม่ของสองหน้าต่างไปเธรดเบื้องหลัง */

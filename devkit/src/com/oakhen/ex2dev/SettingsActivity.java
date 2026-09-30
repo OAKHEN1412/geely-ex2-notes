@@ -70,6 +70,10 @@ public class SettingsActivity extends Activity {
         sub.setTextSize(14);
         root.addView(sub, marginTop(dp(2)));
 
+        // ========== แบ่งจอ (รวมไว้ในแอพนี้ — ไม่มีไอคอนแยกแล้ว) ==========
+        sectionLabel(root, "แบ่งจอ");
+        splitCard(root);
+
         // ========== A) ฟีเจอร์ EX2 (ของเรา) ==========
         sectionLabel(root, "ฟีเจอร์ EX2 · เพิ่มโดยเรา");
 
@@ -104,6 +108,17 @@ public class SettingsActivity extends Activity {
             public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
                 Prefs.of(SettingsActivity.this).edit().putBoolean(Prefs.KEY_WIFI_ON, on).apply();
                 if (on) WifiKeeper.ensureOn();
+            }
+        });
+
+        Switch compass = row(root, "เข็มทิศ Google Maps ใช้ทิศจาก GPS",
+                "จอนี้ไม่มีเข็มทิศที่ปรับเทียบ ลูกศรใน Maps เลยหมุนไปมา · เปิด = ตัดเซ็นเซอร์เฉพาะ Maps ให้หันตามทิศวิ่งแบบ Waze",
+                Prefs.KEY_COMPASS_OFF, false, false);
+        compass.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                sp.edit().putBoolean(Prefs.KEY_COMPASS_OFF, on).apply();
+                SensorGuard.apply(app);
+                toast(on ? "Maps ใช้ทิศจาก GPS แล้ว (ปิด/เปิด Maps ใหม่ถ้ายังหมุน)" : "คืนเซ็นเซอร์ให้ Maps แล้ว");
             }
         });
 
@@ -176,6 +191,78 @@ public class SettingsActivity extends Activity {
             Toast.makeText(this, "เปิดแอพเดิมไม่ได้", Toast.LENGTH_SHORT).show();
         }
     }
+
+    /** การ์ดแบ่งจอ: เลือกแอพ (หน้า SplitActivity) · ชุดล่าสุด · คืนเต็มจอ */
+    private void splitCard(LinearLayout root) {
+        final Context app = getApplicationContext();
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(cardBg());
+        int p = dp(14);
+        card.setPadding(p, p, p, p);
+        root.addView(card, marginTop(dp(12)));
+
+        TextView t = new TextView(this);
+        t.setText("▦  แบ่งจอ 2–3 แอพ");   // 🪟 (Unicode 13) เป็นกล่องบน Android 9
+        t.setTextColor(CREAM); t.setTextSize(17);
+        card.addView(t);
+        TextView d = new TextView(this);
+        boolean ready = SplitScreen.freeformReady(this);
+        d.setText(ready ? "เปิดหลายแอพพร้อมกัน · รองรับ CarPlay (คงสัดส่วนภาพ + ช่องล่างเลือกแอพได้)"
+                : "ยังไม่ได้เปิดโหมดแบ่งจอ — แตะ \"เลือกแอพ\" เพื่อตั้งค่า (รีบูตจอ 1 ครั้ง)");
+        d.setTextColor(MUTED); d.setTextSize(13);
+        card.addView(d, marginTop(dp(2)));
+
+        LinearLayout btns = new LinearLayout(this);
+        btns.setOrientation(LinearLayout.HORIZONTAL);
+        card.addView(btns, marginTop(dp(12)));
+        splitBtn(btns, "เลือกแอพ", true, new View.OnClickListener() {
+            public void onClick(View v) {
+                try {
+                    startActivity(new Intent(SettingsActivity.this, SplitActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Throwable e) { toast("เปิดหน้าแบ่งจอไม่ได้"); }
+            }
+        });
+        final String last = sp.getString(SplitScreen.K_LAST, "");
+        if (ready && last.length() > 0) {
+            splitBtn(btns, "▶ ชุดล่าสุด", false, new View.OnClickListener() {
+                public void onClick(View v) {   // อ่านใหม่ตอนกด (หน้านี้อาจเปิดค้างขณะเปลี่ยนชุด)
+                    java.util.List<android.content.ComponentName> set = SplitScreen.parse(sp.getString(SplitScreen.K_LAST, ""));
+                    if (set.isEmpty()) { toast("ไม่มีชุดล่าสุด"); return; }
+                    SplitScreen.launchSet(app, set);
+                }
+            });
+        }
+        if (ready) {
+            splitBtn(btns, "⤢ คืนเต็มจอ", false, new View.OnClickListener() {
+                public void onClick(View v) {
+                    SplitScreen.worker().post(new Runnable() { public void run() { SplitScreen.exitAll(app); } });
+                    toast("คืนเต็มจอแล้ว");
+                }
+            });
+        }
+    }
+
+    private void splitBtn(LinearLayout parent, String text, boolean primary, View.OnClickListener l) {
+        TextView b = new TextView(this);
+        b.setText(text);
+        b.setTextSize(16);
+        b.setGravity(Gravity.CENTER);
+        b.setTextColor(primary ? BG : CREAM);
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(primary ? CLAY : 0xFF3A3B3F);
+        g.setCornerRadius(dp(12));
+        b.setBackground(g);
+        b.setPadding(dp(18), 0, dp(18), 0);
+        b.setClickable(true);
+        b.setOnClickListener(l);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(48));
+        lp.rightMargin = dp(10);
+        parent.addView(b, lp);
+    }
+
+    private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
 
     // ---------- builders ----------
 

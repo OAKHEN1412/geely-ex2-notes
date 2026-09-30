@@ -12,6 +12,9 @@ public final class Prefs {
     public static final String KEY_BTN_OFF   = "btn_screenoff";    // ปุ่ม 🌚 ปิดจอ ในเมนูกล่อง
     public static final String KEY_BTN_DIM   = "btn_dim";          // ปุ่ม 🌙 หรี่จอ ในเมนูกล่อง
     public static final String KEY_WIFI_ON   = "wifi_always_on";   // Wi-Fi เปิดเสมอ + สแกนหาเครือข่ายเดิม (ไม่ขึ้นกับกล่องลอย)
+    public static final String KEY_COMPASS_OFF  = "compass_off";   // ตัดเซ็นเซอร์เข็มทิศให้แอพนำทาง (ใช้ทิศ GPS) — SensorGuard
+    public static final String KEY_COMPASS_PKGS = "compass_pkgs";  // แพ็กเกจที่ตัด (คั่นด้วย ,)
+    public static final String DEF_COMPASS_PKGS = "com.google.android.apps.maps";
 
     private Prefs() {}
 

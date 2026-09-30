@@ -169,7 +169,8 @@ final class SplitScreen {
             Log.i(TAG, cn.getPackageName() + " task " + task + " -> " + bounds.toShortString());
             return true;
         }
-        if (task != null) forceStop(c, cn.getPackageName());   // task เดิมย้ายไม่ได้ → เปิดใหม่ทั้ง task
+        // task เดิมย้ายไม่ได้ → ไม่ force-stop (เคยทำ: ตัด CarPlay/นำทางที่กำลังใช้) — เปิดด้วย ActivityOptions ต่อไป
+        if (task != null) Log.w(TAG, "place: ย้าย task " + task + " ไม่ได้ (" + cn.getPackageName() + ")");
         try {
             Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
                     .setComponent(cn)
@@ -218,23 +219,67 @@ final class SplitScreen {
         } catch (Throwable t) { Log.w(TAG, "backdrop", t); }
     }
 
-    /** คืนทุกแอพที่อยู่ในหน้าต่างอิสระกลับเป็นเต็มจอ */
-    static void exitAll(Context c) {
-        SplitBackdropActivity.dismiss();
-        SplitBackButtons.clear(c);
-        SplitDividers.clear(c);
-        animRestore(c);
-        try {
-            ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
-            for (ActivityManager.RunningTaskInfo t : am.getRunningTasks(30)) {
-                if (t.topActivity != null && c.getPackageName().equals(t.topActivity.getPackageName())) continue;
-                setMode(t.id, WINDOWING_MODE_FULLSCREEN);
-            }
-        } catch (Throwable t) { Log.w(TAG, "exitAll", t); }
-    }
+    /** ปุ่ม "คืนเต็มจอ" = จบแบ่งจอแบบเดียวกับ endSession
+     *  (ตัวเก่าสั่งเต็มจอ+ขึ้นหน้าทุก task เรียงใหม่→เก่า = แอพเก่าสุดโผล่บนสุด และไม่ resize ก่อน = ค้างครึ่งจอ) */
+    static void exitAll(Context c) { endSession(c); }
 
     /** เวลาที่เริ่มเปิดชุดล่าสุด — ช่วงจัดหน้าต่างพื้นดำอาจถูกบังชั่วคราว ห้ามจบแบ่งจอ */
     static volatile long sLaunchAt;
+    /** รอบของแบ่งจอ: เพิ่มทุกครั้งที่เปิดชุดใหม่/จบ — งานที่ตั้งเวลาไว้เช็คแล้วยกเลิกตัวเองถ้ารอบเปลี่ยน
+     *  (กันงาน enforce/toFront ค้างคิวดึงหน้าต่างทับกล้องถอย/หน้าหลักหลังผู้ใช้ออกจากแบ่งจอแล้ว) */
+    static volatile int sGen;
+
+    // ---------- ลำดับหน้าต่างจริงของจอหลัก (IActivityManager.getAllStackInfos: stack บน→ล่าง) ----------
+    static final class TaskRec {
+        int id, mode; String pkg, name; boolean visible; Rect bounds;
+        public String toString() { return id + ":" + pkg + (visible ? "" : "(hidden)") + " m" + mode; }
+    }
+
+    /** task บน display 0 เรียงบน→ล่าง (รวมข้อมูลโหมด/มองเห็น/กรอบ) · ว่าง = อ่านไม่ได้ */
+    static List<TaskRec> tasks() {
+        List<TaskRec> out = new ArrayList<TaskRec>();
+        try {
+            Object s = iam();
+            List<?> stacks = (List<?>) s.getClass().getMethod("getAllStackInfos").invoke(s);
+            for (Object si : stacks) {
+                Class<?> k = si.getClass();
+                if (k.getField("displayId").getInt(si) != 0) continue;   // จอคลัสเตอร์/virtual display ไม่ยุ่ง
+                boolean vis = k.getField("visible").getBoolean(si);
+                int[] ids = (int[]) k.getField("taskIds").get(si);
+                String[] names = (String[]) k.getField("taskNames").get(si);
+                Rect[] tb = (Rect[]) k.getField("taskBounds").get(si);
+                int mode = 0;
+                try {
+                    Object cfg = k.getField("configuration").get(si);
+                    Object wc = cfg.getClass().getField("windowConfiguration").get(cfg);
+                    mode = (Integer) wc.getClass().getMethod("getWindowingMode").invoke(wc);
+                } catch (Throwable ignored) {}
+                for (int i = ids.length - 1; i >= 0; i--) {   // task ท้าย array = บนสุดของ stack
+                    TaskRec r = new TaskRec();
+                    r.id = ids[i]; r.mode = mode; r.visible = vis;
+                    r.name = names != null && i < names.length ? names[i] : "";
+                    ComponentName cn = ComponentName.unflattenFromString(r.name);
+                    r.pkg = cn != null ? cn.getPackageName() : r.name;
+                    r.bounds = tb != null && i < tb.length ? tb[i] : null;
+                    out.add(r);
+                }
+            }
+        } catch (Throwable t) { Log.w(TAG, "getAllStackInfos", t); }
+        return out;
+    }
+
+    private static String sHome;
+    static String homePkg(Context c) {
+        if (sHome != null) return sHome;
+        try {
+            ResolveInfo h = c.getPackageManager().resolveActivity(
+                    new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0);
+            if (h != null) return sHome = h.activityInfo.packageName;
+        } catch (Throwable ignored) {}
+        return "";
+    }
+
+    static boolean isBackdrop(TaskRec r) { return r.name != null && r.name.endsWith("SplitBackdropActivity"); }
 
     /**
      * แบ่งจอถูกบัง (กดหน้าหลัก / เปิดแอพเต็มจออื่น) → จบแบ่งจอ: เอาปุ่ม/เส้นแบ่ง/พื้นดำออก และคืนหน้าต่างทุกบานเป็นเต็มจอ
@@ -242,27 +287,23 @@ final class SplitScreen {
      * task บนสุดที่ไม่ใช่หน้าหลัก (= แอพที่เพิ่งกดเปิด) ขึ้นหน้าเป็นเต็มจอ ที่เหลือคืนแบบอยู่ข้างหลัง
      */
     static void endSession(Context c) {
+        sGen++;
         SplitBackButtons.clear(c);
         SplitDividers.clear(c);
         animRestore(c);
-        String home = null;
-        try {
-            ResolveInfo h = c.getPackageManager().resolveActivity(
-                    new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0);
-            if (h != null) home = h.activityInfo.packageName;
-        } catch (Throwable ignored) {}
+        String home = homePkg(c);
         Point scr = new Point();
         ((WindowManager) c.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealSize(scr);
         try {
-            ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
-            boolean first = true;
-            for (ActivityManager.RunningTaskInfo t : am.getRunningTasks(30)) {
-                ComponentName top = t.topActivity != null ? t.topActivity : t.baseActivity;
-                String pkg = top != null ? top.getPackageName() : "";
-                if (c.getPackageName().equals(pkg)) continue;
-                if (pkg.equals(home)) { first = false; continue; }
-                Rect b = taskBounds(t.id);
-                boolean windowed = b != null && !b.isEmpty() && (b.width() < scr.x - 8 || b.height() < scr.y - 8);
+            boolean first = true;   // task แรกที่เจอ (ถ้าไม่มีหน้าหลัก/หน้าของเราอยู่บนกว่า) = แอพที่ผู้ใช้เพิ่งเปิด → ขึ้นหน้าเป็นเต็มจอ
+            for (TaskRec t : tasks()) {
+                String pkg = t.pkg;
+                if (isBackdrop(t)) continue;
+                if (c.getPackageName().equals(pkg) || pkg.equals(home)) { first = false; continue; }   // หน้า OAKHEN/หน้าหลักอยู่บน = ให้อยู่บนต่อ
+                if (t.mode != WINDOWING_MODE_FREEFORM && t.mode != WINDOWING_MODE_FULLSCREEN && t.mode != 0) { first = false; continue; }   // PiP/แบ่งจอระบบ ไม่ยุ่ง
+                Rect b = t.bounds != null ? t.bounds : taskBounds(t.id);
+                boolean windowed = t.mode == WINDOWING_MODE_FREEFORM
+                        || (b != null && !b.isEmpty() && (b.width() < scr.x - 8 || b.height() < scr.y - 8));   // เต็มจอแต่ค้างกรอบครึ่งจอ
                 if (windowed) {
                     // เปลี่ยนโหมดอย่างเดียว task ยังจำกรอบครึ่งจอ (เห็นครึ่งจอ+ดำ บนเครื่องจำลอง) → ขยายกรอบเต็มจอก่อน
                     Rect all = new Rect(0, 0, scr.x, scr.y);
@@ -274,7 +315,7 @@ final class SplitScreen {
                     setMode(t.id, WINDOWING_MODE_FULLSCREEN, first);
                     Log.i(TAG, "endSession: task " + t.id + " " + pkg + " -> fullscreen" + (first ? " (top)" : ""));
                 }
-                first = false;
+                if (t.visible) first = false;
             }
         } catch (Throwable t) { Log.w(TAG, "endSession", t); }
         SplitBackdropActivity.dismiss();
@@ -345,7 +386,7 @@ final class SplitScreen {
      *  - เต็มจอ → ต้อง setTaskWindowingMode ก่อน (resizeTask บน task เต็มจอ = "resizeTask not allowed" ใน Android 9)
      *    จังหวะกลางหน้าต่างจะอยู่ขนาดเริ่มต้นกลางจอ → ปิดแอนิเมชันระบบช่วงนั้น (animOff) ให้แวบสั้นที่สุด
      */
-    private static boolean moveTask(int taskId, Rect bounds) {
+    static boolean moveTask(int taskId, Rect bounds) {
         Rect cur = taskBounds(taskId);
         if (cur != null && cur.equals(bounds)) return true;
         // task เต็มจอบางตัวรายงาน bounds = เต็มจอ (ไม่ใช่ว่าง) → resize จะโดน "not allowed"
@@ -399,9 +440,14 @@ final class SplitScreen {
 
     static void launchSet(Context ctx, List<ComponentName> picked) {
         if (picked == null || picked.isEmpty()) return;
-        final List<ComponentName> apps = arrange(picked);
         final Context app = ctx.getApplicationContext();
+        if (!freeformReady(app)) {   // ปิดโหมดนักพัฒนา/รีเซ็ต → เปิดหน้าแบ่งจอ (มีปุ่มตั้งค่า) แทนการพยายามย้ายหน้าต่างที่ย้ายไม่ได้
+            try { app.startActivity(new Intent(app, SplitActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Throwable ignored) {}
+            return;
+        }
+        final List<ComponentName> apps = arrange(picked);
         sLaunchAt = System.currentTimeMillis();
+        final int gen = ++sGen;
         int n = 0;
         for (ComponentName c : apps) if (c != null) n++;
         Prefs.of(app).edit().putString(K_LAST, flatten(apps)).putInt("split_count", Math.max(2, Math.min(3, n))).apply();
@@ -411,29 +457,23 @@ final class SplitScreen {
         SplitDividers.clear(app);
         showBackdrop(app);   // พื้นดำเต็มจอข้างหลัง — ไม่เห็นวอลเปเปอร์
         final Handler h = worker();
-        h.post(new Runnable() { public void run() { animOff(app); } });
+        h.post(new Runnable() { public void run() { if (gen == sGen) animOff(app); } });
         for (int i = 0; i < apps.size(); i++) {
             final int k = i;
             // ทีละแอพห่างกันเล็กน้อย ให้ WM จัดการ task ก่อนหน้าเสร็จ
             h.postDelayed(new Runnable() {
                 public void run() {
-                    if (apps.get(k) == null) return;   // ช่องว่าง → ตัวเลือกแอพ (SplitBackButtons)
+                    if (gen != sGen || apps.get(k) == null) return;   // จบ/เปิดชุดใหม่แล้ว · ช่องว่าง → ตัวเลือกแอพ
                     if (!place(app, apps.get(k), r[k])) Log.w(TAG, "เปิด " + apps.get(k) + " ไม่สำเร็จ");
                 }
             }, 300L * i + 100);
         }
         // ย้ำกรอบ (ทำเฉพาะแอพที่หลุด — moveTask ข้ามถ้าอยู่ถูกที่แล้ว)
         long t = 300L * apps.size() + 900;
-        h.postDelayed(new Runnable() { public void run() { enforce(app, apps, r); } }, t);
-        h.postDelayed(new Runnable() { public void run() { enforce(app, apps, r); animRestore(app); } }, t + 1500);
+        h.postDelayed(new Runnable() { public void run() { if (gen == sGen) enforce(app, apps, r); } }, t);
+        h.postDelayed(new Runnable() { public void run() { if (gen == sGen) enforce(app, apps, r); animRestore(app); } }, t + 1500);
         // ปุ่ม ◀ + เส้นแบ่ง
-        h.postDelayed(new Runnable() { public void run() { SplitBackButtons.show(app, apps, r); } }, t + 1700);
+        h.postDelayed(new Runnable() { public void run() { if (gen == sGen) SplitBackButtons.show(app, apps, r); } }, t + 1700);
     }
 
-    private static void forceStop(Context c, String pkg) {
-        try {
-            ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
-            ActivityManager.class.getMethod("forceStopPackage", String.class).invoke(am, pkg);
-        } catch (Throwable t) { Log.w(TAG, "forceStop " + pkg, t); }
-    }
 }

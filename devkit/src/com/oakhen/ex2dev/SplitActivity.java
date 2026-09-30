@@ -180,9 +180,16 @@ public class SplitActivity extends Activity {
 
     private void toggle(ComponentName cn) {
         if (picked.contains(cn)) picked.remove(cn);
+        else if (samePkgPicked(cn)) toast("เลือกแอพนี้ไปแล้ว (แพ็กเกจเดียวกันอยู่ได้ช่องเดียว)");
         else if (picked.size() < count) picked.add(cn);
         else toast("เลือกได้ " + count + " แอพ — แตะแอพที่เลือกไว้เพื่อยกเลิก");
         refresh();
+    }
+
+    /** แพ็กเกจเดียวกันหลายไอคอน (เช่น วิทยุ/เพลง USB ในแอพเดียว) = task เดียว → แบ่งสองช่องไม่ได้ */
+    private boolean samePkgPicked(ComponentName cn) {
+        for (ComponentName p : picked) if (p.getPackageName().equals(cn.getPackageName())) return true;
+        return false;
     }
 
     private void refresh() {

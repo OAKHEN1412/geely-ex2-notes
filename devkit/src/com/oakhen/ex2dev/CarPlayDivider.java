@@ -97,21 +97,26 @@ final class CarPlayDivider {
         }
         place(app, lps, cur);
         for (int k = 0; k < 2; k++) {
-            try { wm(app).addView(vs[k], lps[k]); sViews.add(vs[k]); } catch (Throwable ignored) {}
+            try { wm(app).addView(vs[k], lps[k]); sViews.add(vs[k]); TapExclude.apply(vs[k], lps[k]); } catch (Throwable ignored) {}
         }
     }
 
     private static void placeAll(Context app, View[] vs, WindowManager.LayoutParams[] lps, Rect[] cur) {
         place(app, lps, cur);
-        for (int k = 0; k < 2; k++) { try { wm(app).updateViewLayout(vs[k], lps[k]); } catch (Throwable ignored) {} }
+        for (int k = 0; k < 2; k++) { try { wm(app).updateViewLayout(vs[k], lps[k]); TapExclude.apply(vs[k], lps[k]); } catch (Throwable ignored) {} }
     }
 
     /** กรอบ 3 ช่องจากความกว้าง CarPlay (บีบให้อยู่ในขอบเขต) */
+    /** แถบหัวหน้าต่าง freeform (decor_caption: ปุ่ม 32dp + ขอบ 5dp×2) อยู่ในกรอบ task — ภาพ CarPlay ได้ความสูงที่เหลือ
+     *  (วัดจากภาพหน้าจอรถ: แถบ ~42px ที่ density 1) */
+    static int caption() { return (int) (42 * android.content.res.Resources.getSystem().getDisplayMetrics().density + 0.5f); }
+
     static void compute(Rect full, int cpW, Rect[] out) {
-        int maxByBottom = (full.height() - GAP - MIN_BOTTOM) * SplitScreen.CP_W / SplitScreen.CP_H;
+        int cap = caption();
+        int maxByBottom = (full.height() - GAP - MIN_BOTTOM - cap) * SplitScreen.CP_W / SplitScreen.CP_H;
         int maxByLeft = full.width() - MIN_LEFT - GAP;
         cpW = Math.max(MIN_CP_W, Math.min(Math.min(maxByBottom, maxByLeft), cpW));
-        int cpH = cpW * SplitScreen.CP_H / SplitScreen.CP_W;
+        int cpH = cpW * SplitScreen.CP_H / SplitScreen.CP_W + cap;   // ภาพ 1920:968 พอดี + แถบหัว
         int x = full.right - cpW;
         out[0].set(full.left, full.top, x - GAP, full.bottom);
         out[1].set(x, full.top, full.right, full.top + cpH);

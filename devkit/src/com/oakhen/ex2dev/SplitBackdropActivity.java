@@ -34,8 +34,12 @@ public class SplitBackdropActivity extends Activity {
         t.setTextSize(16);
         root.addView(t, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
-        root.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { goHome(); }
+        root.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View v, android.view.MotionEvent e) {
+                if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP
+                        && !SplitBackButtons.onBackdropTap(SplitBackdropActivity.this, e.getRawX(), e.getRawY())) goHome();
+                return true;
+            }
         });
         setContentView(root);
     }
@@ -46,18 +50,15 @@ public class SplitBackdropActivity extends Activity {
     static boolean isVisible() { return sVisible; }
 
     @Override protected void onStart() { super.onStart(); sVisible = true; }
+    /** ได้โฟกัส = ถูกดึงขึ้นบนสุด (แตะตัวเลือกแอพ/ร่องที่ทับพื้นดำ) → ดันหน้าต่างแบ่งจอกลับขึ้นไป */
+    @Override protected void onResume() { super.onResume(); SplitBackButtons.raise(this); }
     @Override protected void onStop() {
         super.onStop();
         sVisible = false;
-        if (isFinishing()) return;
-        // ถูกบังค้าง (ไม่ใช่แค่วูบตอนจัดหน้าต่าง) → จบแบ่งจอ คืนทุกหน้าต่างเป็นเต็มจอ
-        final Context app = getApplicationContext();
-        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-            public void run() {
-                if (sVisible || System.currentTimeMillis() - SplitScreen.sLaunchAt < 4000) return;
-                SplitScreen.worker().post(new Runnable() { public void run() { SplitScreen.endSession(app); } });
-            }
-        }, 400);
+        if (isFinishing() || isChangingConfigurations()) return;
+        // ถูกบัง → ให้รอบตรวจของแบ่งจอตัดสินจากลำดับหน้าต่างจริงทันที
+        // (หน้าหลัก = จบแบ่งจอ · กล้องถอย/สายเข้า/แอพอื่น = แค่ซ่อนปุ่ม · จอดับ = ไม่ทำอะไร)
+        SplitBackButtons.checkNow(this);
     }
 
     private void goHome() {

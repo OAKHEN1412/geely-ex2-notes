@@ -33,6 +33,8 @@ public class DevService extends Service {
             try { WifiKeeper.start(app); } catch (Throwable t) { Log.e(TAG, "WifiKeeper", t); }
             // กัน Play Services crash วน (PhoneHub → CrossProfileApps ที่จอไม่มี)
             try { GmsGuard.start(app); } catch (Throwable t) { Log.e(TAG, "GmsGuard", t); }
+            // เข็มทิศ Maps ใช้ทิศ GPS (ค่า override ของ sensorservice หายเมื่อรีบูต → สั่งใหม่ทุกครั้ง)
+            try { SensorGuard.apply(app); } catch (Throwable t) { Log.e(TAG, "SensorGuard", t); }
             // แบ่งจอปิดแอนิเมชันชั่วคราว — ถ้า process ตายก่อนคืนค่า ให้คืนตอนนี้
             try { SplitScreen.animRestore(app); } catch (Throwable t) { Log.e(TAG, "animRestore", t); }
             // task ที่ค้างโหมดหน้าต่างจากแบ่งจอรอบก่อน (process ตาย/อัปเดตแอพ) → คืนเต็มจอ ไม่งั้นเปิดจากหน้าหลักแล้วได้ครึ่งจอ
