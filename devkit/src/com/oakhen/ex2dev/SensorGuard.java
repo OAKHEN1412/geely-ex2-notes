@@ -41,12 +41,13 @@ final class SensorGuard {
         final Context app = ctx.getApplicationContext();
         final Handler h = SplitScreen.worker();
         if (sLoop != null) h.removeCallbacks(sLoop);
-        final boolean on = Prefs.get(app, Prefs.KEY_COMPASS_OFF, false);
+        final boolean on = Prefs.get(app, Prefs.KEY_COMPASS_OFF, true);
         if (!on) {
             h.post(new Runnable() { public void run() { for (String p : targets(app)) cmd("reset-uid-state", p); } });
             sLoop = null;
             return;
         }
+        Log.i(TAG, "ตัดเซ็นเซอร์ต่อเนื่องของ " + java.util.Arrays.toString(targets(app)) + " (สั่งซ้ำทุก " + REAPPLY_MS + " ms)");
         sLoop = new Runnable() {
             public void run() {
                 for (String p : targets(app)) {
@@ -84,7 +85,8 @@ final class SensorGuard {
             int n;
             while ((n = in.read(buf)) > 0) sb.append(new String(buf, 0, n, "UTF-8"));
             String out = sb.toString().trim();
-            Log.i(TAG, "sensorservice " + java.util.Arrays.toString(args) + " -> " + out);
+            if (!out.isEmpty() || !"reset-uid-state".equals(args[0]) && !"set-uid-state".equals(args[0]))   // สั่งซ้ำทุก 2 วิ — log เฉพาะที่มีข้อความตอบกลับ (ผิดพลาด)
+                Log.i(TAG, "sensorservice " + java.util.Arrays.toString(args) + " -> " + out);
             return out;
         } catch (Throwable t) {
             Log.w(TAG, "sensorservice " + java.util.Arrays.toString(args), t);

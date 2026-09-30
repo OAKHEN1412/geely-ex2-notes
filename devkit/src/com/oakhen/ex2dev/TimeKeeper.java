@@ -55,6 +55,11 @@ final class TimeKeeper {
             catch (Throwable t) { Log.w(TAG, "setTimeZone", t); }
         }
         try {
+            // โซนอัตโนมัติเปิดอยู่ = ต้นเหตุโซนจีน (รถบนเครื่อง 30 ก.ย.: auto_time_zone=1 + Asia/Shanghai) → ปิด ไม่ให้เปลี่ยนกลับ
+            if (Settings.Global.getInt(c.getContentResolver(), Settings.Global.AUTO_TIME_ZONE, 0) != 0) {
+                Settings.Global.putInt(c.getContentResolver(), Settings.Global.AUTO_TIME_ZONE, 0);
+                Log.i(TAG, "ปิดโซนเวลาอัตโนมัติ");
+            }
             if (!NTP.equals(Settings.Global.getString(c.getContentResolver(), "ntp_server")))
                 Settings.Global.putString(c.getContentResolver(), "ntp_server", NTP);
             if (Settings.Global.getInt(c.getContentResolver(), Settings.Global.AUTO_TIME, 0) != 1)

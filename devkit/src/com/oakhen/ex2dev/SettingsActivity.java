@@ -164,13 +164,13 @@ public class SettingsActivity extends Activity {
         });
 
         Switch compass = row(root, "เข็มทิศ Google Maps ใช้ทิศจาก GPS",
-                "จอนี้ไม่มีเข็มทิศที่ปรับเทียบ ลูกศรใน Maps เลยหมุนไปมา · เปิด = ตัดเซ็นเซอร์เฉพาะ Maps ให้หันตามทิศวิ่งแบบ Waze",
-                Prefs.KEY_COMPASS_OFF, false, false);
+                "จอนี้ไม่มีเข็มทิศที่ปรับเทียบ ลูกศรใน Maps เลยหมุนไปมา · เปิด = ไม่ส่งเซ็นเซอร์ให้ Play Services (ต้นทางทิศของ Maps) ลูกศรหันตามทิศวิ่งแบบ Waze",
+                Prefs.KEY_COMPASS_OFF, true, false);
         compass.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton b, boolean on) {
                 sp.edit().putBoolean(Prefs.KEY_COMPASS_OFF, on).apply();
                 SensorGuard.apply(app);
-                toast(on ? "Maps ใช้ทิศจาก GPS แล้ว (ปิด/เปิด Maps ใหม่ถ้ายังหมุน)" : "คืนเซ็นเซอร์ให้ Maps แล้ว");
+                toast(on ? "Maps ใช้ทิศจาก GPS แล้ว" : "คืนเซ็นเซอร์ให้ Play Services แล้ว");
             }
         });
 
@@ -267,7 +267,7 @@ public class SettingsActivity extends Activity {
         t.setTextColor(CREAM); t.setTextSize(17);
         card.addView(t);
         TextView d = new TextView(this);
-        d.setText("กดปุ่มบนพวงมาลัยทีละปุ่ม รหัสจะขึ้นด้านล่าง · แตะปุ่มขวาเพื่อเลือกว่าปุ่มนั้นให้ทำอะไร (ค่าเริ่ม = ไม่ทำอะไร ใช้งานเดิมของรถ)");
+        d.setText("ตั้งได้ทั้งกดสั้นและกดค้าง (≥ 0.7 วิ) · ปุ่มพวกนี้รถใช้อยู่แล้ว (เพลง/เสียง/สั่งเสียง) ผูกกับ 'กดค้าง' จะชนการทำงานเดิมน้อยกว่า · ค่าเริ่ม = ไม่ทำอะไร");
         d.setTextColor(MUTED); d.setTextSize(13);
         card.addView(d, marginTop(dp(2)));
         swcStatus = new TextView(this);
@@ -281,43 +281,62 @@ public class SettingsActivity extends Activity {
     private void renderSwc() {
         if (swcList == null) return;
         java.util.List<SwcWatch.Seen> seen = SwcWatch.seen();
-        swcStatus.setText("สถานะ: " + SwcWatch.status() + (seen.isEmpty() ? " · ยังไม่มีปุ่มถูกกด" : ""));
+        swcStatus.setText("สถานะ: " + SwcWatch.status() + " · กดปุ่มบนพวงมาลัย ชื่อปุ่มจะขึ้นสีส้ม");
+        java.util.List<Integer> props = new java.util.ArrayList<Integer>();
+        for (int k : SwcWatch.KNOWN) props.add(k);
+        for (SwcWatch.Seen s : seen) if (!props.contains(s.prop)) props.add(s.prop);
         StringBuilder sig = new StringBuilder();
-        for (SwcWatch.Seen s : seen) sig.append(s.prop).append(':').append(s.count).append(':').append(s.last).append(':').append(SwcWatch.action(this, s.prop)).append(System.currentTimeMillis() - s.at < 1500).append(';');
+        for (int p : props) {
+            SwcWatch.Seen s = find(seen, p);
+            sig.append(p).append(':').append(SwcWatch.action(this, p, false)).append(SwcWatch.action(this, p, true))
+               .append(s == null ? "" : (s.count + "" + s.lastLong + (System.currentTimeMillis() - s.at < 1500)));
+        }
         if (sig.toString().equals(swcSig)) return;
         swcSig = sig.toString();
         swcList.removeAllViews();
-        for (final SwcWatch.Seen s : seen) {
+        for (final int p : props) {
+            SwcWatch.Seen s = find(seen, p);
             LinearLayout row = new LinearLayout(this);
             row.setGravity(Gravity.CENTER_VERTICAL);
             TextView info = new TextView(this);
-            boolean fresh = System.currentTimeMillis() - s.at < 1500;
-            info.setText(String.format("รหัส 0x%08X · ค่าล่าสุด %d · %d ครั้ง%s", s.prop, s.last, s.count, fresh ? "  ● เพิ่งกด" : ""));
-            info.setTextColor(fresh ? CLAY : CREAM); info.setTextSize(14);
+            boolean fresh = s != null && System.currentTimeMillis() - s.at < 1500;
+            info.setText(SwcWatch.name(p) + (fresh ? (s.lastLong ? "  ● กดค้าง" : "  ● กด") : ""));
+            info.setTextColor(fresh ? CLAY : CREAM); info.setTextSize(15);
             row.addView(info, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            String a = SwcWatch.action(this, s.prop);
-            int idx = java.util.Arrays.asList(SwcWatch.ACTIONS).indexOf(a);
-            if (idx < 0) idx = 0;
-            final int cur = idx;
-            TextView btn = new TextView(this);
-            btn.setText(SwcWatch.ACTION_LABELS[cur] + "  ▸");
-            btn.setTextSize(15);
-            btn.setGravity(Gravity.CENTER);
-            btn.setTextColor(cur == 0 ? CREAM : BG);
-            GradientDrawable g = new GradientDrawable();
-            g.setColor(cur == 0 ? 0xFF3A3B3F : CLAY);
-            g.setCornerRadius(dp(10));
-            btn.setBackground(g);
-            btn.setPadding(dp(14), 0, dp(14), 0);
-            btn.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    SwcWatch.setAction(SettingsActivity.this, s.prop, SwcWatch.ACTIONS[(cur + 1) % SwcWatch.ACTIONS.length]);
-                    renderSwc();
-                }
-            });
-            row.addView(btn, new LinearLayout.LayoutParams(dp(190), dp(44)));
+            row.addView(swcBtn(p, false), new LinearLayout.LayoutParams(dp(210), dp(44)));
+            LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(dp(210), dp(44));
+            lp2.leftMargin = dp(8);
+            row.addView(swcBtn(p, true), lp2);
             swcList.addView(row, marginTop(dp(6)));
         }
+    }
+
+    private SwcWatch.Seen find(java.util.List<SwcWatch.Seen> seen, int p) {
+        for (SwcWatch.Seen s : seen) if (s.prop == p) return s;
+        return null;
+    }
+
+    private TextView swcBtn(final int prop, final boolean longPress) {
+        int idx = java.util.Arrays.asList(SwcWatch.ACTIONS).indexOf(SwcWatch.action(this, prop, longPress));
+        if (idx < 0) idx = 0;
+        final int cur = idx;
+        TextView btn = new TextView(this);
+        btn.setText((longPress ? "ค้าง: " : "สั้น: ") + SwcWatch.ACTION_LABELS[cur] + " ▸");
+        btn.setTextSize(14);
+        btn.setGravity(Gravity.CENTER);
+        btn.setTextColor(cur == 0 ? CREAM : BG);
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(cur == 0 ? 0xFF3A3B3F : CLAY);
+        g.setCornerRadius(dp(10));
+        btn.setBackground(g);
+        btn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                SwcWatch.setAction(SettingsActivity.this, prop, longPress, SwcWatch.ACTIONS[(cur + 1) % SwcWatch.ACTIONS.length]);
+                swcSig = "";
+                renderSwc();
+            }
+        });
+        return btn;
     }
 
     @Override protected void onResume() { super.onResume(); ui.post(swcTick); }

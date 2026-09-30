@@ -30,12 +30,22 @@ final class SwcWatch {
     static final int GROUP = 0x41020000, GROUP_MASK = 0xFFFF0000;
     static final int CLICK = 2;
 
+    /** ปุ่มที่รู้จัก (จับจาก log ของ KeyServer ในรถ 30 ก.ย.) · ค่า 1 = กดลง, 2 = ปล่อย */
+    static final int[] KNOWN = {0x41020400, 0x41020200, 0x41020100, 0x41020300, 0x41020500};
+    static final String[] KNOWN_NAMES = {"ซ้าย", "ขวา", "บน (เสียง +)", "ล่าง (เสียง −)", "สั่งเสียง"};
+    static final long LONG_MS = 700;
+    static String name(int prop) {
+        for (int i = 0; i < KNOWN.length; i++) if (KNOWN[i] == prop) return KNOWN_NAMES[i];
+        return String.format("0x%08X", prop);
+    }
+
     static final String[] ACTIONS = {"none", "drive", "regen", "next", "prev", "play"};
     static final String[] ACTION_LABELS = {"ไม่ทำอะไร", "สลับโหมดขับ", "สลับรีเจน", "เพลงถัดไป", "เพลงก่อนหน้า", "เล่น/หยุด"};
 
     /** รหัสที่เห็นแล้ว → ค่าล่าสุด/จำนวนครั้ง (ให้หน้า OAKHEN แสดงตอนดักปุ่ม) */
-    static final class Seen { int prop, last, count; long at; }
+    static final class Seen { int prop, last, count; long at; boolean lastLong; }
     private static final Map<Integer, Seen> sSeen = new LinkedHashMap<Integer, Seen>();
+    private static final java.util.Set<Integer> sFirstDone = new java.util.HashSet<Integer>();
     private static volatile String sStatus = "ยังไม่เริ่ม";
     private static boolean sStarted;
     private static Handler sMain;
@@ -46,13 +56,15 @@ final class SwcWatch {
 
     static synchronized List<Seen> seen() {
         List<Seen> out = new ArrayList<Seen>();
-        for (Seen s : sSeen.values()) { Seen c = new Seen(); c.prop = s.prop; c.last = s.last; c.count = s.count; c.at = s.at; out.add(c); }
+        for (Seen s : sSeen.values()) { Seen c = new Seen(); c.prop = s.prop; c.last = s.last; c.count = s.count; c.at = s.at; c.lastLong = s.lastLong; out.add(c); }
         return out;
     }
 
-    static String action(Context c, int prop) { return Prefs.of(c).getString(key(prop), "none"); }
-    static void setAction(Context c, int prop, String a) { Prefs.of(c).edit().putString(key(prop), a).apply(); }
-    private static String key(int prop) { return "swc_" + Integer.toHexString(prop); }
+    /** longPress=false: กดสั้น · true: กดค้าง ≥ 0.7 วิ */
+    static String action(Context c, int prop, boolean longPress) { return Prefs.of(c).getString(key(prop, longPress), "none"); }
+    static void setAction(Context c, int prop, boolean longPress, String a) { Prefs.of(c).edit().putString(key(prop, longPress), a).apply(); }
+    private static String key(int prop, boolean longPress) { return (longPress ? "swcL_" : "swc_") + Integer.toHexString(prop); }
+    private static final java.util.Map<Integer, Long> sDownAt = new java.util.HashMap<Integer, Long>();
 
     /** เริ่มฟังปุ่ม (DevService) · ต่อ VHAL ไม่ได้ → ลองใหม่ทุก 10 วิ สูงสุด ~5 นาที */
     static void start(Context ctx) {
@@ -78,7 +90,8 @@ final class SwcWatch {
                 int id = (Integer) cfg.getClass().getMethod("getPropertyId").invoke(cfg);
                 if ((id & GROUP_MASK) == GROUP) props.add(id);
             }
-            if (props.isEmpty()) { props.add(0x41020400); props.add(0x41020200); props.add(0x41020500); }   // รายชื่อไม่บอก → ใช้ชุดที่ CentralEXAuto ใช้
+            // รายการของรถไม่มีปุ่มบน/ล่าง (ได้แค่ 3 รหัส) แต่ KeyServer ของรถฟังได้ → ลงทะเบียนชุดที่รู้จักเพิ่มเสมอ
+            for (int k : KNOWN) if (!props.contains(k)) props.add(k);
             final Class<?> cbCls = Class.forName("android.car.hardware.property.CarPropertyManager$CarPropertyEventCallback");
             Object cb = Proxy.newProxyInstance(cbCls.getClassLoader(), new Class<?>[]{cbCls}, new InvocationHandler() {
                 public Object invoke(Object self, Method m, Object[] a) {
@@ -116,14 +129,26 @@ final class SwcWatch {
             if (!(o instanceof Integer)) return;
             val = (Integer) o;
         } catch (Throwable t) { return; }
+        boolean first;
         synchronized (SwcWatch.class) {
-            Seen s = sSeen.get(prop);
-            if (s == null) { s = new Seen(); s.prop = prop; sSeen.put(prop, s); }
-            s.last = val; s.count++; s.at = System.currentTimeMillis();
+            first = !sFirstDone.contains(prop);
+            sFirstDone.add(prop);
+            if (!first) {
+                Seen s = sSeen.get(prop);
+                if (s == null) { s = new Seen(); s.prop = prop; sSeen.put(prop, s); }
+                s.last = val; s.count++; s.at = System.currentTimeMillis();
+            }
         }
-        Log.i(TAG, String.format("ปุ่ม 0x%08x = %d", prop, val));
+        Log.i(TAG, String.format("ปุ่ม 0x%08x = %d%s", prop, val, first ? " (ค่าตั้งต้นตอนลงทะเบียน — ข้าม)" : ""));
+        // ค่าแรกหลัง registerCallback = ค่าปัจจุบัน ไม่ใช่การกด (บนรถ: 0x41020200 = 2 ทันที) → ถ้าไม่ข้าม สตาร์ทรถทีไรสลับโหมดเอง
+        if (first) return;
+        long now = SystemClock.uptimeMillis();
+        if (val == 1) { sDownAt.put(prop, now); return; }
         if (val != CLICK) return;
-        String a = action(app, prop);
+        Long down = sDownAt.remove(prop);
+        boolean longPress = down != null && now - down >= LONG_MS;
+        synchronized (SwcWatch.class) { Seen s = sSeen.get(prop); if (s != null) s.lastLong = longPress; }
+        String a = action(app, prop, longPress);
         if ("drive".equals(a)) cycle(app, Vhal.DRIVE_MODE, Vhal.DRIVE_AREAS,
                 new int[]{Vhal.DRIVE_ECO, Vhal.DRIVE_COMFORT, Vhal.DRIVE_DYNAMIC}, new String[]{"ECO", "COMFORT", "SPORT"}, "โหมดขับ");
         else if ("regen".equals(a)) cycle(app, Vhal.REGEN, Vhal.REGEN_AREAS,
