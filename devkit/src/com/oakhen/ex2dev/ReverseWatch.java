@@ -27,6 +27,13 @@ final class ReverseWatch {
 
     /** ค่าเกียร์ปัจจุบัน หรือ null ถ้ายังอ่านไม่ได้ (ยังเชื่อมต่อไม่เสร็จ / ไม่มีค่า) */
     static synchronized Integer readGear(Context ctx) {
+        if (Vhal.sim(ctx)) {   // เครื่องจำลอง: อ่านจากรถจำลอง (เกียร์ P/R/N/D ตั้งได้จาก carsim)
+            for (int prop : new int[]{GEAR_SELECTION, CURRENT_GEAR}) {
+                Integer v = Vhal.getInt(ctx, prop, 0);
+                if (v != null && v != 0) return v;
+            }
+            return null;
+        }
         Object cpm = cpm(ctx);
         if (cpm == null) return null;
         int errors = 0;

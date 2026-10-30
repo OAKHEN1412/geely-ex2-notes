@@ -39,8 +39,10 @@ final class SwcWatch {
         return String.format("0x%08X", prop);
     }
 
-    static final String[] ACTIONS = {"none", "drive", "regen", "next", "prev", "play"};
-    static final String[] ACTION_LABELS = {"ไม่ทำอะไร", "สลับโหมดขับ", "สลับรีเจน", "เพลงถัดไป", "เพลงก่อนหน้า", "เล่น/หยุด"};
+    static final String[] ACTIONS = {"none", "drive", "regen", "next", "prev", "play", "voice"};
+    static final String[] ACTION_LABELS = {"ไม่ทำอะไร", "สลับโหมดขับ", "สลับรีเจน", "เพลงถัดไป", "เพลงก่อนหน้า", "เล่น/หยุด", "ผู้ช่วยสั่งเสียง"};
+    /** ปุ่มสั่งเสียง — กดสั้นเปิดผู้ช่วยสั่งเสียงเป็นค่าเริ่ม (ปุ่มอื่นค่าเริ่ม = ไม่ทำอะไร) */
+    static final int VOICE_KEY = 0x41020500;
 
     /** รหัสที่เห็นแล้ว → ค่าล่าสุด/จำนวนครั้ง (ให้หน้า OAKHEN แสดงตอนดักปุ่ม) */
     static final class Seen { int prop, last, count; long at; boolean lastLong; }
@@ -61,7 +63,9 @@ final class SwcWatch {
     }
 
     /** longPress=false: กดสั้น · true: กดค้าง ≥ 0.7 วิ */
-    static String action(Context c, int prop, boolean longPress) { return Prefs.of(c).getString(key(prop, longPress), "none"); }
+    static String action(Context c, int prop, boolean longPress) {
+        return Prefs.of(c).getString(key(prop, longPress), prop == VOICE_KEY && !longPress ? "voice" : "none");
+    }
     static void setAction(Context c, int prop, boolean longPress, String a) { Prefs.of(c).edit().putString(key(prop, longPress), a).apply(); }
     private static String key(int prop, boolean longPress) { return (longPress ? "swcL_" : "swc_") + Integer.toHexString(prop); }
     private static final java.util.Map<Integer, Long> sDownAt = new java.util.HashMap<Integer, Long>();
@@ -156,10 +160,18 @@ final class SwcWatch {
         else if ("next".equals(a)) media(KeyEvent.KEYCODE_MEDIA_NEXT);
         else if ("prev".equals(a)) media(KeyEvent.KEYCODE_MEDIA_PREVIOUS);
         else if ("play".equals(a)) media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
+        else if ("voice".equals(a)) VoiceAssistant.toggle(app);
     }
 
-    /** อ่านค่าปัจจุบันจากรถ → ตั้งค่าถัดไปในรอบ → แจ้งบนจอ */
-    private static void cycle(final Context app, final int prop, final int[] areas, final int[] vals, final String[] names, final String what) {
+    /** ผลของ cycle สำหรับผู้เรียกที่ไม่อยากได้ Toast (ผู้ช่วยสั่งเสียงเอาไปพูดเอง) · เรียกบน main thread */
+    interface Done { void on(boolean ok, String msg); }
+
+    private static void cycle(Context app, int prop, int[] areas, int[] vals, String[] names, String what) {
+        cycle(app, prop, areas, vals, names, what, null);
+    }
+
+    /** อ่านค่าปัจจุบันจากรถ → ตั้งค่าถัดไปในรอบ → แจ้งบนจอ (done == null = Toast) */
+    static void cycle(final Context app, final int prop, final int[] areas, final int[] vals, final String[] names, final String what, final Done done) {
         Vhal.thread().post(new Runnable() {
             public void run() {
                 Integer cur = Vhal.getInt(app, prop, areas);
@@ -167,12 +179,16 @@ final class SwcWatch {
                 if (cur != null) for (int k = 0; k < vals.length; k++) if (vals[k] == cur) i = (k + 1) % vals.length;
                 final boolean ok = Vhal.setInt(app, prop, vals[i], areas);
                 final String msg = what + ": " + (ok ? names[i] : "สั่งไม่ได้");
-                sMain.post(new Runnable() { public void run() { Toast.makeText(app, msg, Toast.LENGTH_SHORT).show(); } });
+                sMain.post(new Runnable() {
+                    public void run() {
+                        if (done != null) done.on(ok, msg); else Toast.makeText(app, msg, Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
         });
     }
 
-    private static void media(int code) {
+    static void media(int code) {
         try {
             Class<?> im = Class.forName("android.hardware.input.InputManager");
             Object inst = im.getMethod("getInstance").invoke(null);

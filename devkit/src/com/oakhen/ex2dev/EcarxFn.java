@@ -10,7 +10,7 @@ import java.lang.reflect.Method;
  * ฟังก์ชันรถผ่าน ECarX adaptapi (ICarFunction) — ช่องทางเดียวกับแอปของรถ (AutoSceneDirector) ใช้สั่งโหมดล้างรถ
  * AdapterAPI.jar / AdapterAPIImpl.jar อยู่ใน boot classpath ของจอ (/system/framework/boot-AdapterAPI*.vdex) → เรียกด้วย reflection ได้
  * รหัสฟังก์ชัน (ISceneMode): SCENE_FUNC_WASH_MODE 0x2f010200 · OFF 0x2f010200 · MOVING 0x2f010201 · WASHING 0x2f010202
- * เรียกบนเธรด Vhal.thread() เท่านั้น
+ * เรียกบนเธรด Vhal.thread() เท่านั้น · เครื่องจำลอง (Vhal.sim) → ถามรถจำลอง SimCar แทน
  */
 final class EcarxFn {
     static final String TAG = "EX2Ecarx";
@@ -42,6 +42,7 @@ final class EcarxFn {
 
     /** สถานะรองรับ (ชื่อ enum FunctionStatus เช่น active / notavailable) หรือ null */
     static String status(Context c, int func) {
+        if (Vhal.sim(c)) return SimCar.instance().fnStatus(func);
         Object f = fn(c);
         if (f == null) return null;
         try { return String.valueOf(sIf.getMethod("isFunctionSupported", int.class).invoke(f, func)); }
@@ -49,6 +50,7 @@ final class EcarxFn {
     }
 
     static Integer get(Context c, int func) {
+        if (Vhal.sim(c)) return SimCar.instance().fnGet(func);
         Object f = fn(c);
         if (f == null) return null;
         try { return (Integer) sIf.getMethod("getFunctionValue", int.class).invoke(f, func); }
@@ -56,6 +58,7 @@ final class EcarxFn {
     }
 
     static int[] supportedValues(Context c, int func) {
+        if (Vhal.sim(c)) return SimCar.instance().fnSupported(func);
         Object f = fn(c);
         if (f == null) return null;
         try { return (int[]) sIf.getMethod("getSupportedFunctionValue", int.class).invoke(f, func); }
@@ -63,6 +66,7 @@ final class EcarxFn {
     }
 
     static boolean set(Context c, int func, int value) {
+        if (Vhal.sim(c)) return SimCar.instance().fnSet(func, value);
         Object f = fn(c);
         if (f == null) return false;
         try {

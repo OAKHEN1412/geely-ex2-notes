@@ -15,6 +15,7 @@ public final class Prefs {
     public static final String KEY_TIME_TH   = "time_thai";        // โซนเวลาไทย + ซิงก์เวลาเน็ต (TimeKeeper)
     public static final String KEY_COMPASS_OFF  = "compass_off";   // ตัดเซ็นเซอร์เข็มทิศให้แอพนำทาง (ใช้ทิศ GPS) — SensorGuard
     public static final String KEY_COMPASS_PKGS = "compass_pkgs";  // แพ็กเกจที่ตัด (คั่นด้วย ,)
+    public static final String KEY_SIM_OFF   = "sim_off";          // ปิดรถจำลอง SimCar (ค่าเริ่ม = เปิดเองเฉพาะเมื่อไม่มี android.car · บนรถจริงไม่เคยเปิด)
     // เข็มทิศของ Maps มาจาก Play Services (บนรถ 30 ก.ย.: UNCALI_MAG+ไจโร ถูกอ่านโดย com.google.android.gms uid 10032
     // ส่วน Maps อ่านแค่ accelerometer) · ตัด gms แล้วลูกศรหยุดหมุน (ผู้ใช้ยืนยันในรถ)
     public static final String DEF_COMPASS_PKGS = "com.google.android.gms";

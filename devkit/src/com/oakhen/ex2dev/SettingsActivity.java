@@ -267,7 +267,7 @@ public class SettingsActivity extends Activity {
         t.setTextColor(CREAM); t.setTextSize(17);
         card.addView(t);
         TextView d = new TextView(this);
-        d.setText("ตั้งได้ทั้งกดสั้นและกดค้าง (≥ 0.7 วิ) · ปุ่มพวกนี้รถใช้อยู่แล้ว (เพลง/เสียง/สั่งเสียง) ผูกกับ 'กดค้าง' จะชนการทำงานเดิมน้อยกว่า · ค่าเริ่ม = ไม่ทำอะไร");
+        d.setText("ตั้งได้ทั้งกดสั้นและกดค้าง (≥ 0.7 วิ) · ปุ่มพวกนี้รถใช้อยู่แล้ว (เพลง/เสียง/สั่งเสียง) ผูกกับ 'กดค้าง' จะชนการทำงานเดิมน้อยกว่า · ค่าเริ่ม = ไม่ทำอะไร (ยกเว้นปุ่มสั่งเสียง กดสั้น = ผู้ช่วยสั่งเสียง)");
         d.setTextColor(MUTED); d.setTextSize(13);
         card.addView(d, marginTop(dp(2)));
         swcStatus = new TextView(this);

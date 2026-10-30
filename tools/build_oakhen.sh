@@ -58,6 +58,16 @@ else
   echo "repo=OAKHEN1412/geely-ex2-notes" > "$WORK/assets/oakhen_update.properties"
   echo "    !!! ไม่มี $TOKEN_FILE — ปุ่มอัปเดต OAKHEN ในรถจะขึ้นว่ายังไม่ได้ใส่ token"
 fi
+# ผู้ช่วยสั่งเสียง: key ของ LLM สำรอง (TokenMe) ฝังเป็น assets/oakhen_voice.properties แบบเดียวกับ token อัปเดตเอง (git ไม่เก็บ _signing-kit/)
+#   ไม่มีไฟล์ = build ผ่านตามปกติ แค่ปิด LLM (ผู้ช่วยยังใช้คีย์เวิร์ดในเครื่องได้) · ห้ามพิมพ์ค่า key
+VOICE_KEY_FILE="$REPO/_signing-kit/tokenme-key.txt"
+if [ -s "$VOICE_KEY_FILE" ]; then
+  { printf "key="; tr -d ' \r\n' < "$VOICE_KEY_FILE"; printf "\n"; } > "$WORK/assets/oakhen_voice.properties"
+  echo "    ผู้ช่วยสั่งเสียง: ใส่ key LLM แล้ว (ไม่แสดงค่า)"
+else
+  : > "$WORK/assets/oakhen_voice.properties"
+  echo "    !!! ไม่มี $VOICE_KEY_FILE — ผู้ช่วยสั่งเสียงจะไม่ถาม LLM (ไม่เข้าใจ = บอกว่าไม่เข้าใจ)"
+fi
 py -X utf8 - "$WORK" "$BUILD_N" <<'PY'
 import sys,io
 w=sys.argv[1]; n=sys.argv[2]
@@ -99,6 +109,7 @@ inj='''        <service android:name="com.oakhen.ex2dev.DevService" android:expo
         <activity android:name="com.oakhen.ex2dev.SplitBackdropActivity" android:exported="false" android:theme="@android:style/Theme.Black.NoTitleBar" android:excludeFromRecents="true" android:taskAffinity="com.oakhen.ex2dev.backdrop" android:launchMode="singleTask" android:resizeableActivity="false"/>
         <activity android:name="com.oakhen.ex2dev.UpdateActivity" android:exported="false" android:label="อัปเดตแอป" android:theme="@android:style/Theme.Material"/>
         <activity android:name="com.oakhen.ex2dev.TripActivity" android:exported="false" android:label="บันทึกการเดินทาง" android:theme="@android:style/Theme.Material"/>
+        <activity android:name="com.oakhen.ex2dev.VoicePermActivity" android:exported="false" android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true" android:taskAffinity="com.oakhen.ex2dev.voiceperm"/>
         <!-- แบ่งจอรวมอยู่ในหน้า OAKHEN (SettingsActivity) + กล่องลอยแล้ว — ไม่มีไอคอนแยก -->
         <activity android:name="com.oakhen.ex2dev.SplitActivity" android:exported="false" android:label="แบ่งจอ" android:theme="@android:style/Theme.Material" android:excludeFromRecents="true" android:taskAffinity="com.oakhen.ex2dev.split" android:launchMode="singleTask" android:resizeableActivity="false"/>
     </application>'''
@@ -107,9 +118,16 @@ if 'android.permission.DEVICE_POWER' not in s:
                 '<uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>\n    <uses-permission android:name="android.permission.DEVICE_POWER"/>', 1)
 if 'com.oakhen.ex2dev.DevService' not in s:
     s=s.replace('    </application>', inj, 1)
+# ผู้ช่วยสั่งเสียง: ไมค์ (ขอตอนรันไทม์ผ่าน VoicePermActivity หรือ pm grant) + เน็ต (SpeechRecognizer ของ Google / LLM)
+for perm in ('android.permission.RECORD_AUDIO','android.permission.INTERNET'):
+    if 'name="'+perm+'"' not in s:
+        s=s.replace('<uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>',
+                    '<uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>\n    <uses-permission android:name="'+perm+'"/>', 1)
 io.open(mp,'w',encoding='utf-8').write(s)
 print("    manifest harness:", 'com.oakhen.ex2dev.DevService' in io.open(mp,encoding='utf-8').read(),
-      "| DEVICE_POWER:", 'android.permission.DEVICE_POWER' in io.open(mp,encoding='utf-8').read())
+      "| DEVICE_POWER:", 'android.permission.DEVICE_POWER' in io.open(mp,encoding='utf-8').read(),
+      "| RECORD_AUDIO:", 'android.permission.RECORD_AUDIO' in io.open(mp,encoding='utf-8').read(),
+      "| INTERNET:", 'android.permission.INTERNET' in io.open(mp,encoding='utf-8').read())
 PY
 
 echo ">>> [5/6] build"

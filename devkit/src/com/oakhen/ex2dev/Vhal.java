@@ -38,7 +38,8 @@ final class Vhal {
     static final int[] WASH_AREAS = {0, 1, 0x1000000};
 
     private static Object sCar, sCpm;
-    private static boolean sNoCar;   // ไม่มี android.car (เครื่องจำลอง) → ไม่ต้องลองซ้ำ
+    private static volatile boolean sNoCar;   // ไม่มี android.car (เครื่องจำลอง) → ไม่ต้องลองซ้ำ
+    private static volatile boolean sProbed;
     private static Handler sThread;
 
     private Vhal() {}
@@ -52,8 +53,46 @@ final class Vhal {
         return sThread;
     }
 
-    /** CarPropertyManager หรือ null (ยังเชื่อมไม่เสร็จ/ไม่มีระบบรถ เช่นเครื่องจำลอง) · รอเชื่อมต่อสูงสุด ~2 วิ */
+    /** ไม่มี android.car บนเครื่องนี้ (เครื่องจำลอง) — ตรวจครั้งเดียว · มี class = รถจริง ต่อให้ต่อไม่ติดก็ไม่ใช่เครื่องจำลอง */
+    static boolean noCar() {
+        if (!sProbed) {
+            try { Class.forName("android.car.Car"); } catch (ClassNotFoundException e) { sNoCar = true; } catch (Throwable ignored) {}
+            sProbed = true;
+        }
+        return sNoCar;
+    }
+
+    /** ใช้รถจำลอง (SimCar) แทน VHAL ไหม — เฉพาะเมื่อไม่มี android.car และไม่ได้ปิดใน Prefs (KEY_SIM_OFF) · บนรถจริงเป็น false เสมอ */
+    static boolean sim(Context c) {
+        return noCar() && !Prefs.get(c, Prefs.KEY_SIM_OFF, false);
+    }
+
+    /** SimCar ที่เดินอยู่ (ใช้เมื่อ sim() เป็น true เท่านั้น) */
+    private static SimCar car() {
+        SimCar s = SimCar.instance();
+        s.start();
+        return s;
+    }
+
+    /**
+     * ฟังการเปลี่ยนค่าของ prop (0 = ทุกตัว) จากรถจำลอง · false = ไม่ใช่โหมดจำลอง → ผู้เรียกลง CarPropertyManager.registerCallback เอง
+     * callback ถูกส่งบนเธรด main (เหมือน callback ของ Car) และได้ค่าปัจจุบันก่อนทันทีหนึ่งครั้ง (เหมือนบนรถ — SwcWatch ข้ามค่าแรก)
+     */
+    static boolean listen(Context c, int prop, final SimCar.Listener l) {
+        if (!sim(c)) return false;
+        final Handler main = new Handler(android.os.Looper.getMainLooper());
+        car().listen(prop, new SimCar.Listener() {
+            public void onChange(final int p, final int a, final Object v) {
+                main.post(new Runnable() { public void run() { l.onChange(p, a, v); } });
+            }
+        });
+        return true;
+    }
+
+    /** CarPropertyManager หรือ null (ยังเชื่อมไม่เสร็จ/ไม่มีระบบรถ เช่นเครื่องจำลอง) · รอเชื่อมต่อสูงสุด ~2 วิ
+     *  โหมดจำลอง: คืน SimCar เป็นตัวแทน (ไม่ใช่ null → QuickPanel/TripLog ถือว่า "ต่อรถได้") · ห้ามเอาไป reflect เป็น CarPropertyManager */
     static synchronized Object cpm(Context ctx) {
+        if (sim(ctx)) return car();
         if (sCpm != null) return sCpm;
         if (sNoCar) return null;
         try {
@@ -73,7 +112,7 @@ final class Vhal {
         } catch (ClassNotFoundException e) {
             sNoCar = true;
             Log.w(TAG, "ไม่มี android.car บนเครื่องนี้");
-            return null;
+            return sim(ctx) ? car() : null;
         } catch (Throwable t) {
             Log.w(TAG, "car connect: " + t);
             return null;
@@ -84,6 +123,7 @@ final class Vhal {
 
     /** รถประกาศ property นี้ไว้จริงไหม (getPropertyList) — ใช้กันปุ่มสั่งของที่รถไม่มี */
     static boolean supported(Context c, int prop) {
+        if (sim(c)) return car().has(prop);
         Object m = cpm(c);
         if (m == null) return false;
         if (sProps == null) {
@@ -99,6 +139,7 @@ final class Vhal {
     }
 
     static Integer getInt(Context c, int prop, int... areas) {
+        if (sim(c)) return car().getInt(prop, areas);
         Object m = cpm(c);
         if (m == null) return null;
         for (int a : areas) {
@@ -109,6 +150,7 @@ final class Vhal {
     }
 
     static Float getFloat(Context c, int prop, int... areas) {
+        if (sim(c)) return car().getFloat(prop, areas);
         Object m = cpm(c);
         if (m == null) return null;
         for (int a : areas) {
@@ -119,6 +161,7 @@ final class Vhal {
     }
 
     static Boolean getBool(Context c, int prop, int... areas) {
+        if (sim(c)) return car().getBool(prop, areas);
         Object m = cpm(c);
         if (m == null) return null;
         for (int a : areas) {
@@ -130,6 +173,7 @@ final class Vhal {
 
     /** สั่งค่า int — ลองทีละ area จนกว่าจะผ่าน (แบบ CentralEXAuto) · true = มี area ที่รับ */
     static boolean setInt(Context c, int prop, int value, int... areas) {
+        if (sim(c)) return car().setInt(prop, value, areas);
         Object m = cpm(c);
         if (m == null) return false;
         for (int a : areas) {
@@ -144,6 +188,7 @@ final class Vhal {
     }
 
     static boolean setFloat(Context c, int prop, float value, int... areas) {
+        if (sim(c)) return car().setFloat(prop, value, areas);
         Object m = cpm(c);
         if (m == null) return false;
         boolean any = false;
@@ -158,6 +203,7 @@ final class Vhal {
     }
 
     static boolean setBool(Context c, int prop, boolean value, int... areas) {
+        if (sim(c)) return car().setBool(prop, value, areas);
         Object m = cpm(c);
         if (m == null) return false;
         for (int a : areas) {

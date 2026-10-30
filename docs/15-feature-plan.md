@@ -36,5 +36,42 @@
 | 6 | กล้องบันทึก 360 (ต่อจาก `11-dashcam-design.md`) | ใช่ | รอ |
 | 7 | **จอดซ้อนคัน** (ล็อครถแล้วยังค้าง N) | ใช่ | **รถไม่รองรับ** — ถามผ่าน ECarX adaptapi (`ICarFunction.isFunctionSupported`, ช่องทางเดียวกับแอป AutoSceneDirector ของรถ): โหมดล้างรถ `0x2f010200`, `SETTING_FUNC_TRSM_PARK_LOCK` `0x20319e00`, `SETTING_FUNC_P_GEAR_UNLOCK` `0x2c010a00` = `notavailable` ทั้งหมด (30 ก.ย.) · หน้าโหมดล้างรถใน AutoSceneDirector ก็ไม่ได้ลงทะเบียนใน manifest · ไม่สั่ง VHAL ดิบของระบบขับเคลื่อน (ความปลอดภัย) · แถวในแผงซ่อนเองเมื่อรถตอบ notavailable |
 | 8 | **อัปเดตแอปจากจอรถ** (หน้า OAKHEN → ⬆ อัปเดตแอป): OAKHEN จาก GitHub Releases (repo private + token อ่านอย่างเดียวฝังตอน build จาก `_signing-kit/update-token.txt`, ปล่อยด้วย `tools/release_oakhen.sh`) · แอปอื่นจาก APKPure: เลือกเวอร์ชันใหม่สุดที่ minSdk ≤ 28 (อ่าน manifest ผ่าน HTTP Range ไม่ต้องโหลดทั้งไฟล์) · ลายเซ็นต้องตรงกับตัวที่ลงอยู่ · APK/XAPK · ลงเงียบด้วย PackageInstaller | ไม่ (OAKHEN ต้องมี token) | เครื่องจำลอง: F-Droid 1.22→1.23.2 (APK), Wikipedia 50603→50608 (XAPK) ผ่าน · ✅ รถ: YouTube 20.51→21.23.492 · OAKHEN: token (Contents read-only, repo นี้อย่างเดียว) ใส่แล้ว, release `oakhen-40` ลงผ่าน adb ครั้งแรก, ตรวจจากรถได้ "ล่าสุดแล้ว" |
+| 9 | **ผู้ช่วยสั่งเสียงบนพวงมาลัย** (กดปุ่มสั่งเสียง `0x41020500` → การ์ตูนเด้งมุมขวาล่าง + ลูกโป่ง → ฟังไทย → ทำตามคำสั่ง → พูดตอบ): เปิดแอพ · แบ่งจอ 2–3 แอพ · นำทาง · เพลง · แอร์/อุณหภูมิ/พัดลม/โหมดขับ/รีเจน · ไม่เข้าใจค่อยถาม LLM | ใช่ (ไมค์ + เน็ตฮอตสปอต) | โค้ดเสร็จ `VoiceIntent` (ทดสอบ 70+ เคสบนคอม `devkit/test/run_voice_test.sh`) `VoiceAssistant` `VoiceMascot` `VoiceLlm` `VoicePermActivity` · build harness ผ่าน · **ยังไม่ได้ลองบนรถ** (ดูหัวข้อด้านล่าง) |
+| 10 | **รถจำลอง (SimCar)** สำหรับเทสบนเครื่องจำลอง EX2_A9 ที่ไม่มี android.car/VHAL/ECarX: ที่เก็บ property + โมเดลขับ (เร่ง/เบรกนุ่ม, ไมล์, แบตลด 13 kWh/100 km, ชาร์จ) · เปิดเองเฉพาะเมื่อไม่มี android.car (รถจริงไม่เคยเปิด) · สั่งจากคอมด้วย `tools/carsim/carsim.py` (หน้าเว็บ + CLI) ผ่าน broadcast `com.oakhen.ex2dev.SIM` · รายละเอียด/สมมติฐาน/Pending wiring: `docs/16-car-simulator.md` | ไม่ | โค้ด+ทดสอบบนคอมเสร็จ (`devkit/test/run_sim_test.sh`) · **ยังไม่ต่อสาย** DevService/SwcWatch (diff รออยู่ใน docs/16) · ยังไม่ได้ลองบนเครื่องจำลองจริง |
 
 > พบ 30 ก.ย.: YouTube **21.23.492** บน APKPure มี minSdkVersion **28** (ตรวจ 2 วิธี) → ลงบนจอนี้ได้ · บันทึกเดิมที่ว่า "21.x ต้อง Android 10" ไม่ถูกสำหรับไฟล์ชุดนี้ · อาจแก้ปัญหาคลัง/400 ถ้าต้นเหตุคือเวอร์ชันเก่า
+
+## ผู้ช่วยสั่งเสียง (งาน 9) — ทำงานยังไง
+
+**ลำดับ:** กดปุ่มสั่งเสียงที่พวงมาลัย (`SwcWatch` → action `voice`, ค่าเริ่ม *เฉพาะปุ่มนี้ กดสั้น*; ปุ่มอื่น/กดค้างยัง "ไม่ทำอะไร") → `VoiceAssistant` โชว์การ์ตูน (`VoiceMascot` วาดด้วย Canvas) → `SpeechRecognizer` ภาษา `th-TH` → ลูกโป่งโชว์คำที่ได้ยิน → `VoiceIntent.parse` (คีย์เวิร์ดในเครื่อง ไม่ใช้เน็ต) → ถ้าไม่ตรงและมี key → `VoiceLlm` ถาม LLM ให้คืน JSON intent ชุดเดียวกัน → ทำคำสั่ง → พูดตอบ (`TextToSpeech` ไทย; ไม่มีเสียงไทยก็ข้าม เหลือข้อความ) → หายเอง ~3 วิหลังเสร็จ · ยกเลิก = กดปุ่มซ้ำ หรือแตะที่ใดก็ได้บนจอ
+
+| พูดว่า | ทำอะไร |
+|---|---|
+| เปิด ยูทูป / เปิดแผนที่ / เปิดสปอติฟาย | เทียบกับชื่อแอพบนหน้าหลัก (ไทย/อังกฤษ + คำเรียกเล่น + ชื่อแพ็กเกจ เช่น CarPlay) แล้วเปิด |
+| แบ่งจอ ยูทูป กับ แผนที่ (2–3 แอพ) | `SplitScreen.launchSet` (CarPlay จัดเป็นแผงกลางเองใน `arrange`) · ยังไม่เปิดโหมดแบ่งจอ = เปิดหน้าแบ่งจอให้ |
+| ไป ตลาดไท / นำทางไป … | `google.navigation:q=` ไป Google Maps |
+| เพลงถัดไป / ก่อนหน้า / เล่น / หยุด | ปุ่มมีเดีย `SwcWatch.media` (เล่น/หยุดแยกกัน ไม่ใช่สลับ) |
+| เปิดเพลง ใจสั่น | `MEDIA_PLAY_FROM_SEARCH` ไป YouTube Music (ไม่มีค่อย Spotify) |
+| เปิด/ปิดแอร์ · อุณหภูมิ 24 องศา (16–32) · พัดลม 3 (1–7) | `Vhal.setBool/setFloat/setInt` ตัวเดียวกับ `QuickPanel` |
+| สลับโหมดขับ / รีเจน | `SwcWatch.cycle` ตัวเดียวกับปุ่มพวงมาลัย — ไม่มีการเขียน VHAL ดิบของระบบขับเคลื่อนเพิ่ม |
+| ยกเลิก / ปิด | ปิดผู้ช่วย |
+
+ตัวเลขพูดเป็นคำไทยได้ (ยี่สิบสี่ = 24) · เสียงเพลงที่เล่นอยู่ถูกพักด้วย audio focus ระหว่างฟัง
+
+**ค่าที่ต้องมี**
+- สิทธิ์ `RECORD_AUDIO` + `INTERNET` — `tools/build_oakhen.sh` เติมใน manifest ให้ (ถ้ายังไม่มี) · ครั้งแรกที่กด ถ้ายังไม่มีสิทธิ์ ผู้ช่วยเปิดกล่องขอสิทธิ์ของระบบ (`VoicePermActivity`) หรือให้เลยด้วย adb:
+  `adb shell pm grant com.geely.ex2.tools android.permission.RECORD_AUDIO`
+- ต้องมีบริการแปลงเสียง: ไม่มี (`SpeechRecognizer.isRecognitionAvailable()` = false) → ลูกโป่งขึ้น "ไม่พบบริการแปลงเสียง — ต้องลงแอป Google" + บันทึก log `EX2Voice` · เลือกตัวแปลง: Google (`com.google.android.googlequicksearchbox`) ก่อน → ตามที่ตั้งใน `voice_recognition_service` → ตัวแรกที่มี
+- เน็ต: STT ของ Google + LLM ใช้อินเทอร์เน็ต (ฮอตสปอตมือถือ)
+- key LLM: ใส่ใน `_signing-kit/tokenme-key.txt` (ไฟล์เดียว บรรทัดเดียว ไม่ commit — `_signing-kit/` อยู่ใน .gitignore) → `build_oakhen.sh` ฝังเป็น `assets/oakhen_voice.properties` เหมือน token อัปเดตเอง · ไม่มีไฟล์ = build ผ่านปกติ แต่ไม่ถาม LLM (ไม่ตรงคีย์เวิร์ด = "ไม่เข้าใจคำสั่ง") · โมเดล `deepseek-ai/deepseek-v4-flash-0731` (reasoning: max_tokens 6000, ลองใหม่ 1 ครั้งที่ 12000 ถ้า `finish_reason: length`) ส่ง User-Agent `curl/8.5.0` กัน Cloudflare 1010 · ไม่ log ค่า key
+
+**เช็กบนรถ**
+```bash
+adb shell dumpsys package com.google.android.googlequicksearchbox | grep version     # มีแอป Google + เวอร์ชัน
+adb shell settings get secure voice_recognition_service                            # ตัวแปลงเสียงที่ระบบตั้งไว้ (null = ไม่ได้ตั้ง — แอปหา Google เอง)
+adb shell dumpsys package com.geely.ex2.tools | grep -E "RECORD_AUDIO|INTERNET"      # granted=true ?
+adb logcat -s EX2Voice EX2Swc                                                       # recognizer ที่เลือก / intent ที่ได้ / ข้อผิดพลาด
+```
+
+**ยังไม่ได้ยืนยันบนรถ** (เขียนจาก API มาตรฐาน): Google STT ไทยทำงานบนจอ Android 9 นี้ · TTS ไทยมีเสียงไหม · การ์ตูนไม่บังข้อมูลขับขี่ที่มุมขวาล่าง · เสียงพูดออกลำโพงช่องไหน · `MEDIA_PLAY_FROM_SEARCH` ของ YT Music · ปุ่มสั่งเสียงของรถเองยังทำงานคู่กัน (แอปดักค่าได้ แต่ไม่ได้บล็อกการทำงานเดิมของรถ)
+

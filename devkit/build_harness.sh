@@ -6,7 +6,7 @@
 # ได้:  devkit/prebuilt/ex2dev-classes17.dex   ->  จากนั้น  ! bash tools/build_oakhen.sh  เพื่อฉีดเข้า APK
 # ต้องมี: JDK17 (javac), r8.jar (D8), android28.jar
 set -e
-REPO="/c/Users/Pishe/Desktop/geely-ex2-notes"
+REPO="${REPO:-$(cd "$(dirname "$0")/.." && pwd)}"   # หาจากที่อยู่สคริปต์ (ย้ายเครื่องได้) · override ด้วย env REPO
 D="$REPO/devkit"
 SRC="$D/src/com/oakhen/ex2dev"
 OUTDEX="$D/prebuilt/ex2dev-classes17.dex"
@@ -17,6 +17,7 @@ AJ="${ANDROID_JAR:-$D/prebuilt/android28.jar}"
 if [ -z "$JAVAC" ]; then
   JAVAC="$(ls -d /c/Users/*/AppData/Local/Temp/claude/*/*/scratchpad/devkit/jdk/jdk-*/bin/javac.exe 2>/dev/null | head -1)"
 fi
+[ -n "$JAVAC" ] || JAVAC="$(command -v javac 2>/dev/null)"   # สำรอง: javac ใน PATH
 [ -n "$JAVAC" ] && command -v "$JAVAC" >/dev/null 2>&1 || { echo "!!! ต้อง set env JAVAC ให้ชี้ javac.exe (Temurin JDK 17)"; exit 1; }
 JAVA="$(dirname "$JAVAC")/java.exe"
 [ -f "$R8" ] || { echo "!!! ไม่พบ $R8 — โหลด: curl -L https://maven.google.com/com/android/tools/r8/8.3.37/r8-8.3.37.jar -o $R8"; exit 1; }
